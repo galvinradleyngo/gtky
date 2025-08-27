@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Host - GTKY</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <h1>Host Game</h1>
+  <button id="create">Create Room</button>
+  <div id="room" class="hidden">
+    <p>Room Code: <span id="code"></span></p>
+    <h2>Players</h2>
+    <ul id="players"></ul>
+    <button id="start">Start Round</button>
+    <h2>Leaderboard</h2>
+    <ul id="leaderboard"></ul>
+  </div>
+  <script src="/host.js"></script>
+</body>
+</html>
