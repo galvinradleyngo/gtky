@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Join - GTKY</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <h1>Join Game</h1>
+  <form id="joinForm">
+    <input type="text" name="code" placeholder="Room Code" required />
+    <input type="text" name="name" placeholder="Your Name" required />
+    <input type="text" name="fact" placeholder="Fun Fact" required />
+    <button type="submit">Join</button>
+  </form>
+  <div id="game" class="hidden">
+    <h2 id="question"></h2>
+    <div id="options"></div>
+    <p id="status"></p>
+  </div>
+  <script src="/player.js"></script>
+</body>
+</html>

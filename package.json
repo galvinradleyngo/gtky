@@ -1,0 +1,11 @@
+{
+  "name": "gtky",
+  "version": "1.0.0",
+  "description": "A quiz game about us",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  }
+}
