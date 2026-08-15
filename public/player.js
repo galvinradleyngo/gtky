@@ -9,6 +9,8 @@ const statusEl = document.getElementById('status');
 const progressEl = document.getElementById('progress');
 const finalPanel = document.getElementById('finalPanel');
 const finalLeaderboardEl = document.getElementById('finalLeaderboard');
+const removeMeBtn = document.getElementById('removeMe');
+const removeStatusEl = document.getElementById('removeStatus');
 
 let code;
 let name;
@@ -37,6 +39,7 @@ form.onsubmit = async e => {
   code = form.code.value.trim().toUpperCase();
   name = form.name.value.trim();
   const fact = form.fact.value.trim();
+  const password = form.password.value;
   if (!code || !name || !fact) return;
 
   let data;
@@ -44,7 +47,7 @@ form.onsubmit = async e => {
     const res = await fetch('/join-room', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, name, fact })
+      body: JSON.stringify({ code, name, fact, password })
     });
     data = await res.json();
     if (!res.ok || data.error) {
@@ -115,10 +118,46 @@ function connectEvents() {
         li.textContent = `${p.name}: ${p.score}`;
         finalLeaderboardEl.appendChild(li);
       });
+      removeMeBtn.disabled = false;
+      removeMeBtn.classList.remove('hidden');
+      removeStatusEl.classList.add('hidden');
       finalPanel.classList.remove('hidden');
+    }
+
+    if (msg.type === 'room-deleted') {
+      questionEl.classList.add('hidden');
+      subjectNoticeEl.classList.add('hidden');
+      optionsEl.innerHTML = '';
+      progressEl.textContent = '';
+      waitingEl.classList.add('hidden');
+      finalPanel.classList.add('hidden');
+      statusEl.textContent = "This game's data has been deleted.";
     }
   };
 }
+
+removeMeBtn.onclick = async () => {
+  if (!confirm('Remove your name, fact, and score from this game now?')) return;
+  removeMeBtn.disabled = true;
+  try {
+    const res = await fetch('/remove-me', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, name })
+    });
+    const data = await res.json();
+    if (data.error) {
+      removeStatusEl.textContent = data.error;
+    } else {
+      removeStatusEl.textContent = 'Your data has been removed.';
+      removeMeBtn.classList.add('hidden');
+    }
+  } catch {
+    removeStatusEl.textContent = 'Network error. Please try again.';
+    removeMeBtn.disabled = false;
+  }
+  removeStatusEl.classList.remove('hidden');
+};
 
 async function answer(guess) {
   if (hasAnswered) return;
