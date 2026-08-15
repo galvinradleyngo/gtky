@@ -10,6 +10,7 @@ const roomNameInput = document.getElementById('roomName');
 const roomPasswordInput = document.getElementById('roomPassword');
 const roundSecondsInput = document.getElementById('roundSeconds');
 const maxQuestionsInput = document.getElementById('maxQuestions');
+const factsToPlayInput = document.getElementById('factsToPlay');
 const musicEnabledInput = document.getElementById('musicEnabled');
 const roomDiv = document.getElementById('room');
 const gameIconEl = document.getElementById('gameIcon');
@@ -37,6 +38,7 @@ const editRoomName = document.getElementById('editRoomName');
 const editRoomPassword = document.getElementById('editRoomPassword');
 const editRoundSeconds = document.getElementById('editRoundSeconds');
 const editMaxQuestions = document.getElementById('editMaxQuestions');
+const editFactsToPlay = document.getElementById('editFactsToPlay');
 const editMusicEnabled = document.getElementById('editMusicEnabled');
 const cancelEditSettingsBtn = document.getElementById('cancelEditSettings');
 const gameOverPanel = document.getElementById('gameOverPanel');
@@ -61,6 +63,7 @@ let roomStatus = 'lobby';
 let currentRoomName = '';
 let currentRoundSeconds = 180;
 let currentMaxQuestions = null;
+let currentFactsToPlay = null;
 let pendingLeaderboard = [];
 let pendingPodium = [];
 
@@ -400,13 +403,15 @@ function openRoomPanel({
   roomName,
   musicEnabled: me,
   roundSeconds,
-  maxQuestions
+  maxQuestions,
+  factsToPlay
 }) {
   code = c;
   musicEnabled = Boolean(me);
   currentRoomName = roomName || '';
   currentRoundSeconds = roundSeconds || 180;
   currentMaxQuestions = maxQuestions || null;
+  currentFactsToPlay = factsToPlay || null;
   codeSpan.textContent = code;
   if (joinUrl) joinUrlInput.value = joinUrl;
   if (qrCode) qrImg.src = qrCode;
@@ -557,6 +562,7 @@ createForm.onsubmit = async e => {
         name: roomNameInput.value,
         roundSeconds: roundSecondsInput.value || undefined,
         maxQuestions: maxQuestionsInput.value || undefined,
+        factsToPlay: factsToPlayInput.value || undefined,
         musicEnabled: musicEnabledInput.checked
       })
     });
@@ -637,6 +643,7 @@ editSettingsBtn.onclick = () => {
   editRoomPassword.value = '';
   editRoundSeconds.value = String(currentRoundSeconds);
   editMaxQuestions.value = currentMaxQuestions ? String(currentMaxQuestions) : '';
+  editFactsToPlay.value = currentFactsToPlay ? String(currentFactsToPlay) : '';
   editMusicEnabled.checked = musicEnabled;
   editSettingsPanel.classList.remove('hidden');
   editSettingsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -652,6 +659,7 @@ editSettingsForm.onsubmit = async e => {
     name: editRoomName.value,
     roundSeconds: editRoundSeconds.value,
     maxQuestions: editMaxQuestions.value || '',
+    factsToPlay: editFactsToPlay.value || '',
     musicEnabled: editMusicEnabled.checked
   };
   // Only touch the password if the host actually typed a new one — an

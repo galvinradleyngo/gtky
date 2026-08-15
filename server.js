@@ -218,7 +218,19 @@ function validateMaxQuestions(value) {
   if (!Number.isInteger(n) || n < 1 || n > MAX_QUESTIONS_LIMIT) {
     return {
       ok: false,
-      error: `number of facts must be a whole number between 1 and ${MAX_QUESTIONS_LIMIT}`
+      error: `facts per player must be a whole number between 1 and ${MAX_QUESTIONS_LIMIT}`
+    };
+  }
+  return { ok: true, value: n };
+}
+
+function validateFactsToPlay(value) {
+  if (value === undefined || value === null || value === '') return { ok: true, value: null };
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 2 || n > MAX_QUESTIONS_LIMIT) {
+    return {
+      ok: false,
+      error: `facts to play must be a whole number of at least 2 (up to ${MAX_QUESTIONS_LIMIT})`
     };
   }
   return { ok: true, value: n };
@@ -253,6 +265,10 @@ function handleAPI(req, res) {
       if (!maxQuestionsCheck.ok) return send(res, 400, { error: maxQuestionsCheck.error });
       const maxQuestions = maxQuestionsCheck.value;
 
+      const factsToPlayCheck = validateFactsToPlay(body.factsToPlay);
+      if (!factsToPlayCheck.ok) return send(res, 400, { error: factsToPlayCheck.error });
+      const factsToPlay = factsToPlayCheck.value;
+
       const musicEnabled = Boolean(body.musicEnabled);
 
       const code = generateCode();
@@ -269,6 +285,7 @@ function handleAPI(req, res) {
         timer: null,
         roundSeconds,
         maxQuestions,
+        factsToPlay,
         musicEnabled,
         hostToken,
         password,
@@ -284,6 +301,7 @@ function handleAPI(req, res) {
         roomName: name,
         roundSeconds,
         maxQuestions,
+        factsToPlay,
         musicEnabled,
         passwordProtected: password.length > 0
       });
@@ -324,6 +342,11 @@ function handleAPI(req, res) {
         if (!check.ok) return send(res, 400, { error: check.error });
         room.maxQuestions = check.value;
       }
+      if (body.factsToPlay !== undefined) {
+        const check = validateFactsToPlay(body.factsToPlay);
+        if (!check.ok) return send(res, 400, { error: check.error });
+        room.factsToPlay = check.value;
+      }
       if (body.musicEnabled !== undefined) {
         room.musicEnabled = Boolean(body.musicEnabled);
       }
@@ -334,6 +357,7 @@ function handleAPI(req, res) {
         roomName: room.name,
         roundSeconds: room.roundSeconds,
         maxQuestions: room.maxQuestions,
+        factsToPlay: room.factsToPlay,
         musicEnabled: room.musicEnabled,
         passwordProtected: Boolean(room.password),
         icon: room.icon
@@ -346,7 +370,7 @@ function handleAPI(req, res) {
     parseBody(req, (err, body) => {
       if (err) return send(res, 400, { error: 'invalid request body' });
       const code = String(body.code || '').trim().toUpperCase();
-      const password = String(body.password || '');
+      const password = String(body.password || '').trim();
       const room = rooms.get(code);
       if (!room) return send(res, 404, { error: 'room not found' });
       if (room.password && room.password !== password) {
@@ -391,6 +415,7 @@ function handleAPI(req, res) {
         roomName: room.name,
         roundSeconds: room.roundSeconds,
         maxQuestions: room.maxQuestions,
+        factsToPlay: room.factsToPlay,
         musicEnabled: room.musicEnabled
       });
     });
@@ -408,6 +433,7 @@ function handleAPI(req, res) {
       endsAt: room.endsAt,
       roundSeconds: room.roundSeconds,
       maxQuestions: room.maxQuestions,
+      factsToPlay: room.factsToPlay,
       musicEnabled: room.musicEnabled,
       icon: room.icon,
       roomName: room.name,
@@ -472,11 +498,17 @@ function handleAPI(req, res) {
         return send(res, 400, { error: 'need at least 2 players to start' });
       }
 
+      // "Facts to play" is a shared pool: only these players' facts are ever
+      // asked about this game. "Facts per player" separately trims how many
+      // of those (up to what's available) each individual player is asked.
+      const poolSize = room.factsToPlay ? Math.min(room.factsToPlay, names.length) : names.length;
+      const pool = poolSize < names.length ? shuffle(names).slice(0, poolSize) : names;
+
       room.queues = new Map();
       room.progress = new Map();
       room.answerLog = new Map();
       for (const n of names) {
-        const fullQueue = shuffle(names.filter(x => x !== n));
+        const fullQueue = shuffle(pool.filter(x => x !== n));
         const queue = room.maxQuestions ? fullQueue.slice(0, room.maxQuestions) : fullQueue;
         room.queues.set(n, queue);
         room.progress.set(n, 0);
