@@ -1,15 +1,27 @@
+const PLAYER_ICONS = [
+  '😀', '😎', '🤖', '👽', '🐱', '🐶', '🦊', '🐼', '🐨', '🐵',
+  '🦁', '🐯', '🐸', '🐙', '🦄', '🐝', '🦋', '🐬', '🦉', '🦖',
+  '🍩', '🍪', '🍉', '🍓', '🍒', '🥑', '🍔', '🌮', '⚽', '🏀',
+  '🎸', '🎧', '🚀', '🛸', '⭐', '🌙', '🔥', '💎', '🎯', '🎨'
+];
+
 const joinCard = document.getElementById('joinCard');
 const form = document.getElementById('joinForm');
+const iconPickerEl = document.getElementById('iconPicker');
 const joinErrorEl = document.getElementById('joinError');
 const gameDiv = document.getElementById('game');
+const gameIconEl = document.getElementById('gameIcon');
+const roomNameDisplay = document.getElementById('roomNameDisplay');
 const waitingEl = document.getElementById('waiting');
+const timerWrap = document.getElementById('timerWrap');
+const timerEl = document.getElementById('timer');
+const muteMusicBtn = document.getElementById('muteMusic');
+const questionLabelEl = document.getElementById('questionLabel');
 const questionEl = document.getElementById('question');
-const subjectNoticeEl = document.getElementById('subjectNotice');
 const optionsEl = document.getElementById('options');
 const statusEl = document.getElementById('status');
-const progressEl = document.getElementById('progress');
+const finishedNoticeEl = document.getElementById('finishedNotice');
 const finalPanel = document.getElementById('finalPanel');
-const finalLeaderboardEl = document.getElementById('finalLeaderboard');
 const removeMeBtn = document.getElementById('removeMe');
 const removeStatusEl = document.getElementById('removeStatus');
 
@@ -17,6 +29,11 @@ let code;
 let name;
 let source;
 let hasAnswered = false;
+let musicEnabled = false;
+let musicUserMuted = false;
+let countdownTimer = null;
+let cachedOptions = [];
+let selectedIcon = PLAYER_ICONS[Math.floor(Math.random() * PLAYER_ICONS.length)];
 
 const params = new URLSearchParams(location.search);
 const prefillCode = params.get('code');
@@ -24,6 +41,18 @@ if (prefillCode) {
   form.code.value = prefillCode.toUpperCase();
   form.name.focus();
 }
+
+PLAYER_ICONS.forEach(icon => {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = icon;
+  if (icon === selectedIcon) btn.classList.add('selected');
+  btn.onclick = () => {
+    selectedIcon = icon;
+    [...iconPickerEl.children].forEach(b => b.classList.toggle('selected', b === btn));
+  };
+  iconPickerEl.appendChild(btn);
+});
 
 function showError(msg) {
   joinErrorEl.textContent = msg;
@@ -34,8 +63,35 @@ function setOptionsDisabled(disabled) {
   [...optionsEl.children].forEach(b => (b.disabled = disabled));
 }
 
+function formatRemaining(ms) {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function startCountdown(endsAt) {
+  stopCountdown();
+  timerWrap.classList.remove('hidden');
+  const tick = () => {
+    const remaining = endsAt - Date.now();
+    timerEl.textContent = formatRemaining(remaining);
+    if (remaining <= 0) stopCountdown();
+  };
+  tick();
+  countdownTimer = setInterval(tick, 250);
+}
+
+function stopCountdown() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+}
+
 form.onsubmit = async e => {
   e.preventDefault();
+  if (window.GtkyMusic) window.GtkyMusic.unlock();
   joinErrorEl.classList.add('hidden');
   code = form.code.value.trim().toUpperCase();
   name = form.name.value.trim();
@@ -48,7 +104,7 @@ form.onsubmit = async e => {
     const res = await fetch('/join-room', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, name, fact, password })
+      body: JSON.stringify({ code, name, fact, password, icon: selectedIcon })
     });
     data = await res.json();
     if (!res.ok || data.error) {
@@ -60,10 +116,41 @@ form.onsubmit = async e => {
     return;
   }
 
+  musicEnabled = Boolean(data.musicEnabled);
+  if (data.icon) gameIconEl.textContent = data.icon;
+  if (data.roomName) {
+    roomNameDisplay.textContent = data.roomName;
+    roomNameDisplay.classList.remove('hidden');
+  } else {
+    roomNameDisplay.classList.add('hidden');
+  }
+
   joinCard.classList.add('hidden');
   gameDiv.classList.remove('hidden');
   connectEvents();
 };
+
+function renderQuestion(fact, questionIndex, totalQuestions) {
+  hasAnswered = false;
+  waitingEl.classList.add('hidden');
+  finishedNoticeEl.classList.add('hidden');
+  questionLabelEl.textContent = `Question ${questionIndex} of ${totalQuestions}`;
+  questionLabelEl.classList.remove('hidden');
+  questionEl.textContent = fact;
+  questionEl.classList.remove('hidden');
+  statusEl.textContent = '';
+  optionsEl.innerHTML = '';
+  cachedOptions.forEach(opt => {
+    const btn = document.createElement('button');
+    const avatar = document.createElement('span');
+    avatar.className = 'player-avatar';
+    avatar.textContent = opt.icon || '🙂';
+    btn.appendChild(avatar);
+    btn.appendChild(document.createTextNode(opt.name));
+    btn.onclick = () => answer(opt.name);
+    optionsEl.appendChild(btn);
+  });
+}
 
 function connectEvents() {
   source = new EventSource(`/events?code=${code}&name=${encodeURIComponent(name)}`);
@@ -71,54 +158,26 @@ function connectEvents() {
     const msg = JSON.parse(e.data);
 
     if (msg.type === 'question') {
-      hasAnswered = false;
-      waitingEl.classList.add('hidden');
-      questionEl.classList.remove('hidden');
-      questionEl.textContent = msg.fact;
-      statusEl.textContent = '';
-      progressEl.textContent = '';
-      finalPanel.classList.add('hidden');
-      optionsEl.innerHTML = '';
-      if (msg.isSubject) {
-        subjectNoticeEl.classList.remove('hidden');
-      } else {
-        subjectNoticeEl.classList.add('hidden');
-        msg.options.forEach(opt => {
-          const btn = document.createElement('button');
-          btn.textContent = opt;
-          btn.onclick = () => answer(opt);
-          optionsEl.appendChild(btn);
-        });
+      cachedOptions = msg.options;
+      musicEnabled = Boolean(msg.musicEnabled);
+      startCountdown(msg.endsAt);
+      if (musicEnabled) {
+        muteMusicBtn.classList.remove('hidden');
+        if (!musicUserMuted && window.GtkyMusic) window.GtkyMusic.start();
       }
-    }
-
-    if (msg.type === 'player-answered') {
-      progressEl.textContent = `Answers in: ${msg.answeredCount}/${msg.totalEligible}`;
-    }
-
-    if (msg.type === 'reveal') {
-      questionEl.classList.add('hidden');
-      subjectNoticeEl.classList.add('hidden');
-      setOptionsDisabled(true);
-      progressEl.textContent = '';
-      statusEl.textContent = `"${msg.fact}" was ${msg.answer}.`;
-      waitingEl.textContent = 'Waiting for the next round...';
-      waitingEl.classList.remove('hidden');
+      renderQuestion(msg.fact, msg.questionIndex, msg.totalQuestions);
     }
 
     if (msg.type === 'game-over') {
+      stopCountdown();
+      timerWrap.classList.add('hidden');
+      if (window.GtkyMusic) window.GtkyMusic.stop();
       waitingEl.classList.add('hidden');
+      questionLabelEl.classList.add('hidden');
       questionEl.classList.add('hidden');
-      subjectNoticeEl.classList.add('hidden');
+      finishedNoticeEl.classList.add('hidden');
       optionsEl.innerHTML = '';
-      progressEl.textContent = '';
       statusEl.textContent = 'The game has ended.';
-      finalLeaderboardEl.innerHTML = '';
-      msg.leaderboard.forEach(p => {
-        const li = document.createElement('li');
-        li.textContent = `${p.name}: ${p.score}`;
-        finalLeaderboardEl.appendChild(li);
-      });
       removeMeBtn.disabled = false;
       removeMeBtn.classList.remove('hidden');
       removeStatusEl.classList.add('hidden');
@@ -126,16 +185,32 @@ function connectEvents() {
     }
 
     if (msg.type === 'room-deleted') {
+      stopCountdown();
+      if (window.GtkyMusic) window.GtkyMusic.stop();
+      timerWrap.classList.add('hidden');
       questionEl.classList.add('hidden');
-      subjectNoticeEl.classList.add('hidden');
+      questionLabelEl.classList.add('hidden');
       optionsEl.innerHTML = '';
-      progressEl.textContent = '';
+      finishedNoticeEl.classList.add('hidden');
       waitingEl.classList.add('hidden');
       finalPanel.classList.add('hidden');
       statusEl.textContent = "This game's data has been deleted.";
     }
   };
 }
+
+muteMusicBtn.onclick = () => {
+  if (!window.GtkyMusic) return;
+  if (window.GtkyMusic.isPlaying()) {
+    window.GtkyMusic.stop();
+    musicUserMuted = true;
+    muteMusicBtn.textContent = '🔊 Unmute Music';
+  } else {
+    window.GtkyMusic.start();
+    musicUserMuted = false;
+    muteMusicBtn.textContent = '🔇 Mute Music';
+  }
+};
 
 removeMeBtn.onclick = async () => {
   if (!confirm('Remove your name, fact, and score from this game now?')) return;
@@ -177,9 +252,19 @@ async function answer(guess) {
       setOptionsDisabled(false);
       return;
     }
-    statusEl.textContent = data.correct
-      ? 'Correct!'
-      : `Not quite — it was ${data.answer}.`;
+    statusEl.textContent = data.correct ? 'Correct!' : `Not quite — it was ${data.answer}.`;
+
+    setTimeout(() => {
+      if (data.finished) {
+        questionLabelEl.classList.add('hidden');
+        questionEl.classList.add('hidden');
+        optionsEl.innerHTML = '';
+        statusEl.textContent = '';
+        finishedNoticeEl.classList.remove('hidden');
+      } else if (data.next) {
+        renderQuestion(data.next.fact, data.next.questionIndex, data.next.totalQuestions);
+      }
+    }, 1200);
   } catch {
     statusEl.textContent = 'Network error submitting your answer.';
     hasAnswered = false;

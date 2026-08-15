@@ -18,30 +18,45 @@
         <input type="text" name="name" placeholder="Your Name" maxlength="40" required />
         <input type="text" name="fact" placeholder="Fun Fact About You" maxlength="280" required />
         <input type="password" name="password" placeholder="Room Password (if set)" maxlength="60" />
+        <label class="hint" style="text-align: left; margin-bottom: -4px;">Pick your avatar</label>
+        <div id="iconPicker" class="icon-picker"></div>
         <button type="submit" class="primary">Join</button>
       </form>
       <p id="joinError" class="error hidden" style="margin-top: 10px;"></p>
-      <p class="hint" style="margin-top: 10px;">Data note: your name, fact, and score are stored only in memory while this game runs, and are automatically deleted no later than 2 weeks after the room was created.</p>
+      <p class="hint" style="margin-top: 10px;">Data note: your fun fact is personal, so it's erased from the server the moment this game ends &mdash; win, lose, or the host stops it early. Your name and score stick around only long enough to show the final leaderboard, and the whole room is deleted automatically no later than 2 weeks after it was created either way.</p>
     </div>
 
     <div id="game" class="hidden">
+      <div class="card join-panel">
+        <div id="gameIcon" class="icon-badge small"></div>
+        <h2 id="roomNameDisplay" class="hidden"></h2>
+      </div>
+
       <div class="card">
-        <p id="waiting" class="hint">Waiting for the host to start a round...</p>
+        <p id="waiting" class="hint">Waiting for the host to start the game...</p>
+
+        <div id="timerWrap" class="timer-wrap hidden">
+          <p id="timer" class="timer">--:--</p>
+          <button id="muteMusic" type="button" class="secondary hidden">🔇 Mute Music</button>
+        </div>
+
+        <p id="questionLabel" class="hint hidden"></p>
         <h2 id="question" class="hidden"></h2>
-        <p id="subjectNotice" class="hint hidden">This fact is about you! Sit back and watch everyone guess.</p>
         <div id="options"></div>
         <p id="status"></p>
-        <p id="progress" class="hint"></p>
+        <p id="finishedNotice" class="hint hidden">You've answered every question! Hang tight while everyone else finishes (or the timer runs out).</p>
       </div>
+
       <div id="finalPanel" class="card hidden">
-        <h2>Final Leaderboard</h2>
-        <ul id="finalLeaderboard"></ul>
+        <h2>Game Over!</h2>
+        <p class="hint">Look up at the host's screen for the final leaderboard and podium.</p>
         <p class="hint">Your data will be deleted automatically within 2 weeks. Want it gone sooner?</p>
         <button id="removeMe" type="button" class="danger">Remove My Data</button>
         <p id="removeStatus" class="hint hidden"></p>
       </div>
     </div>
   </div>
+  <script src="/music.js"></script>
   <script src="/player.js"></script>
 </body>
 </html>

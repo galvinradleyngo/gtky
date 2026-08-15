@@ -24,7 +24,6 @@
     min-height: 100vh;
     color: var(--ink);
     background: linear-gradient(160deg, #6a4bf5, #9333ea 60%);
-    background-attachment: fixed;
   }
   .page { max-width: 480px; margin: 0 auto; }
   h1 {
@@ -32,13 +31,20 @@
     color: #ffffff;
     font-size: 2.1rem;
     text-align: center;
-    margin: 8px 0 20px;
+    margin: 8px 0 4px;
     text-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
+  }
+  .tagline {
+    text-align: center;
+    color: #ffffff;
+    opacity: 0.9;
+    font-weight: 500;
+    margin: 0 0 20px;
   }
   h2 {
     font-family: 'Space Grotesk', sans-serif;
-    font-size: 1.1rem;
-    margin: 0 0 10px;
+    font-size: 1.15rem;
+    margin: 0 0 6px;
   }
   .card {
     background: #ffffff;
@@ -46,6 +52,7 @@
     box-shadow: 0 12px 30px rgba(31, 17, 71, 0.25);
     padding: 22px;
     margin-bottom: 16px;
+    overflow: hidden;
   }
   p { line-height: 1.5; }
   .play-btn {
@@ -64,6 +71,44 @@
   }
   .play-btn:hover { transform: translateY(-2px); }
   .play-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--purple-dark); }
+  .hint {
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .step-num {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--yellow), var(--red));
+    color: white;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .step-text {
+    padding-top: 3px;
+  }
+  .step-text strong {
+    display: block;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .shot {
+    display: block;
+    width: 100%;
+    border-radius: 12px;
+    border: 1px solid #eee5ff;
+    margin: 4px 0 18px;
+  }
   ul.features {
     list-style: none;
     padding: 0;
@@ -78,11 +123,6 @@
     background: #f6f5ff;
     font-weight: 500;
     font-size: 0.95rem;
-  }
-  .hint {
-    color: var(--muted);
-    font-size: 0.85rem;
-    line-height: 1.5;
   }
   a.repo-link {
     color: #ffffff;
@@ -100,9 +140,10 @@
 <body>
   <div class="page">
     <h1>Gotten to Know You</h1>
+    <p class="tagline">The icebreaker quiz that finds out who actually knows who.</p>
 
     <div class="card">
-      <p>A live quiz game for testing what you actually know about each other. Everyone joins from their own phone — submit a fun fact, then guess whose fact is whose.</p>
+      <p>Everyone submits a fun fact about themselves, then races the clock guessing who each <em>other</em> fact belongs to — never their own. No accounts, no app to install, just a code or a QR scan.</p>
       <a class="play-btn" href="https://gtky-u0y9.onrender.com/">Play Now &rarr;</a>
       <p class="hint" style="margin-top: 12px; margin-bottom: 0;">
         Free hosting means the app may take 30&ndash;50 seconds to wake up if it's been idle &mdash; open it a minute before you want to start.
@@ -110,13 +151,54 @@
     </div>
 
     <div class="card">
-      <h2>How it works</h2>
+      <h2>How to play</h2>
+
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">
+          <strong>Host creates a room</strong>
+          Name it, set a password if you want, choose the round timer, and optionally turn on background music. Every room gets a random icon as its logo.
+        </div>
+      </div>
+      <img class="shot" src="screenshots/01-host-room.png" alt="Host screen showing a room icon, name, room code, and QR code" />
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">
+          <strong>Everyone joins and picks an avatar</strong>
+          Scan the QR code or open the short link, submit a name and one fun fact, and choose an avatar from 40 icons.
+        </div>
+      </div>
+      <img class="shot" src="screenshots/02-player-join-avatar-picker.png" alt="Join screen with a 40-icon avatar picker grid" />
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">
+          <strong>The host starts the game</strong>
+          Everyone gets their own personal quiz — every other player's fact, but never their own — and races the shared countdown at their own pace.
+        </div>
+      </div>
+      <img class="shot" src="screenshots/04-player-question.png" alt="Player screen showing a countdown timer, a fun fact, and colorful answer buttons with avatars" />
+
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">
+          <strong>Find out instantly, then check the podium</strong>
+          Every guess gets private, instant right/wrong feedback. Once the timer ends (or everyone finishes), the host's screen reveals an Olympic-style podium — tap any top-3 finisher to see exactly what they guessed.
+        </div>
+      </div>
+      <img class="shot" src="screenshots/05-podium.png" alt="Podium showing 1st, 2nd, and 3rd place finishers with avatars and scores" />
+    </div>
+
+    <div class="card">
+      <h2>Good to know</h2>
       <ul class="features">
-        <li>Host creates a room and shares a QR code or short link</li>
-        <li>Players join from any device &mdash; no accounts needed</li>
+        <li>No accounts needed &mdash; just a room code or link</li>
         <li>Rooms can be password protected</li>
-        <li>Guess who each fun fact belongs to; live leaderboard updates as you go</li>
-        <li>Game data is deleted automatically within 2 weeks, sooner on request</li>
+        <li>The leaderboard and podium only show on the host's screen, so everyone looks up together</li>
+        <li>Fun facts are erased from the server the moment a game ends</li>
+        <li>Host can end a game early or delete its data anytime</li>
+        <li>Everything else is deleted automatically within 2 weeks either way</li>
       </ul>
     </div>
 

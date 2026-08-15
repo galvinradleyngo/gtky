@@ -9,7 +9,20 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I ambiguity
+export const GAME_ICONS = [
+  '🎉', '🎈', '🎯', '🎪', '🎲', '🎮', '🏆', '🚀', '🌟', '🔥',
+  '🎨', '🎸', '🦄', '🐙', '🍕', '🌈', '⚡', '🧩', '🎭', '🍀'
+];
+export const PLAYER_ICONS = [
+  '😀', '😎', '🤖', '👽', '🐱', '🐶', '🦊', '🐼', '🐨', '🐵',
+  '🦁', '🐯', '🐸', '🐙', '🦄', '🐝', '🦋', '🐬', '🦉', '🦖',
+  '🍩', '🍪', '🍉', '🍓', '🍒', '🥑', '🍔', '🌮', '⚽', '🏀',
+  '🎸', '🎧', '🚀', '🛸', '⭐', '🌙', '🔥', '💎', '🎯', '🎨'
+];
 const MAX_BODY_BYTES = 10_000;
+const DEFAULT_ROUND_SECONDS = 180;
+const MIN_ROUND_SECONDS = 30;
+const MAX_ROUND_SECONDS = 1800;
 const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
 export const MAX_ROOM_AGE_MS = 14 * 24 * 60 * 60 * 1000; // hard cap: nothing outlives 2 weeks
 
@@ -77,9 +90,17 @@ export function isRoomStale(room, now) {
   return idleTooLong || tooOld;
 }
 
+function clearRoomTimer(room) {
+  if (room.timer) {
+    clearTimeout(room.timer);
+    room.timer = null;
+  }
+}
+
 function deleteRoom(code) {
   const room = rooms.get(code);
   if (!room) return;
+  clearRoomTimer(room);
   broadcastAll(code, { type: 'room-deleted' });
   room.clients.forEach(c => {
     try {
@@ -100,6 +121,15 @@ function generateCode() {
     }
   } while (rooms.has(code));
   return code;
+}
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 function safeWrite(client, payload) {
@@ -128,27 +158,45 @@ function broadcastEach(code, buildForClient) {
 
 function getLeaderboard(room) {
   return [...room.players.entries()]
-    .map(([name, p]) => ({ name, score: p.score }))
+    .map(([name, p]) => ({ name, score: p.score, icon: p.icon }))
     .sort((a, b) => b.score - a.score);
 }
 
-function finalizeRound(room, code) {
-  const results = [...room.answered.entries()].map(([name, a]) => ({
-    name,
-    guess: a.guess,
-    correct: a.correct
-  }));
-  broadcastAll(code, {
-    type: 'reveal',
-    fact: room.currentFact,
-    answer: room.currentAnswer,
-    results
-  });
-  broadcastAll(code, { type: 'leaderboard', leaderboard: getLeaderboard(room) });
-  room.status = 'reveal';
-  room.currentAnswer = null;
-  room.currentFact = null;
+function rosterList(room) {
+  return [...room.players.entries()].map(([name, p]) => ({ name, icon: p.icon }));
+}
+
+function erasePersonalData(room) {
+  // Participants' fun facts are personal data; wipe them the moment the game
+  // ends instead of waiting for the room's 2-week retention cap or a manual
+  // delete. Names and scores stay (needed for the leaderboard/history), but
+  // the fact text itself is gone from server memory for good.
+  for (const player of room.players.values()) {
+    player.fact = null;
+  }
+  for (const log of room.answerLog.values()) {
+    for (const entry of log) {
+      entry.fact = null;
+    }
+  }
+}
+
+function finalizeGame(room, code) {
+  clearRoomTimer(room);
+  room.status = 'complete';
   room.lastActivity = Date.now();
+  const leaderboard = getLeaderboard(room);
+  broadcastAll(code, { type: 'game-over', leaderboard, podium: leaderboard.slice(0, 3) });
+  erasePersonalData(room);
+}
+
+function completedCount(room) {
+  let count = 0;
+  for (const name of room.players.keys()) {
+    const queue = room.queues.get(name) || [];
+    if ((room.progress.get(name) ?? 0) >= queue.length) count++;
+  }
+  return count;
 }
 
 function joinUrlFor(req, code) {
@@ -169,24 +217,66 @@ function handleAPI(req, res) {
       if (err) return send(res, 400, { error: 'invalid request body' });
       const password = String(body.password || '').trim();
       if (password.length > 60) return send(res, 400, { error: 'password is too long' });
+      const name = String(body.name || '').trim();
+      if (name.length > 60) return send(res, 400, { error: 'room name is too long' });
+
+      let roundSeconds = DEFAULT_ROUND_SECONDS;
+      if (body.roundSeconds !== undefined && body.roundSeconds !== null && body.roundSeconds !== '') {
+        const n = Number(body.roundSeconds);
+        if (!Number.isInteger(n) || n < MIN_ROUND_SECONDS || n > MAX_ROUND_SECONDS) {
+          return send(res, 400, {
+            error: `round timer must be a whole number of seconds between ${MIN_ROUND_SECONDS} and ${MAX_ROUND_SECONDS}`
+          });
+        }
+        roundSeconds = n;
+      }
+      const musicEnabled = Boolean(body.musicEnabled);
+
       const code = generateCode();
       const hostToken = crypto.randomBytes(16).toString('hex');
+      const icon = GAME_ICONS[Math.floor(Math.random() * GAME_ICONS.length)];
       rooms.set(code, {
         players: new Map(),
         clients: [],
         status: 'lobby',
-        currentAnswer: null,
-        currentFact: null,
-        answered: new Map(),
-        eligibleCount: 0,
-        usedFacts: new Set(),
-        round: 0,
+        queues: new Map(),
+        progress: new Map(),
+        answerLog: new Map(),
+        endsAt: null,
+        timer: null,
+        roundSeconds,
+        musicEnabled,
         hostToken,
         password,
+        icon,
+        name,
         createdAt: Date.now(),
         lastActivity: Date.now()
       });
-      sendWithQr(req, res, code, { code, hostToken, passwordProtected: password.length > 0 });
+      sendWithQr(req, res, code, {
+        code,
+        hostToken,
+        icon,
+        roomName: name,
+        roundSeconds,
+        musicEnabled,
+        passwordProtected: password.length > 0
+      });
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/verify-password') {
+    parseBody(req, (err, body) => {
+      if (err) return send(res, 400, { error: 'invalid request body' });
+      const code = String(body.code || '').trim().toUpperCase();
+      const password = String(body.password || '');
+      const room = rooms.get(code);
+      if (!room) return send(res, 404, { error: 'room not found' });
+      if (room.password && room.password !== password) {
+        return send(res, 403, { error: 'incorrect password' });
+      }
+      send(res, 200, { ok: true });
     });
     return;
   }
@@ -203,6 +293,10 @@ function handleAPI(req, res) {
       }
       if (name.length > 40) return send(res, 400, { error: 'name is too long' });
       if (fact.length > 280) return send(res, 400, { error: 'fun fact is too long' });
+      const requestedIcon = String(body.icon || '');
+      const playerIcon = PLAYER_ICONS.includes(requestedIcon)
+        ? requestedIcon
+        : PLAYER_ICONS[Math.floor(Math.random() * PLAYER_ICONS.length)];
       const room = rooms.get(code);
       if (!room) return send(res, 404, { error: 'room not found' });
       if (room.password && room.password !== password) {
@@ -212,10 +306,18 @@ function handleAPI(req, res) {
         n => n.toLowerCase() === name.toLowerCase()
       );
       if (taken) return send(res, 400, { error: 'that name is already taken in this room' });
-      room.players.set(name, { fact, score: 0 });
+      room.players.set(name, { fact, score: 0, icon: playerIcon });
       room.lastActivity = Date.now();
-      broadcastAll(code, { type: 'roster', players: [...room.players.keys()] });
-      send(res, 200, { ok: true, name });
+      broadcastAll(code, { type: 'roster', players: rosterList(room) });
+      send(res, 200, {
+        ok: true,
+        name,
+        playerIcon,
+        icon: room.icon,
+        roomName: room.name,
+        roundSeconds: room.roundSeconds,
+        musicEnabled: room.musicEnabled
+      });
     });
     return;
   }
@@ -228,11 +330,29 @@ function handleAPI(req, res) {
     sendWithQr(req, res, code, {
       code,
       status: room.status,
-      round: room.round,
+      endsAt: room.endsAt,
+      roundSeconds: room.roundSeconds,
+      musicEnabled: room.musicEnabled,
+      icon: room.icon,
+      roomName: room.name,
       passwordProtected: Boolean(room.password),
-      players: [...room.players.entries()].map(([name, p]) => ({ name, score: p.score })),
+      players: [...room.players.entries()].map(([name, p]) => ({ name, score: p.score, icon: p.icon })),
       leaderboard: getLeaderboard(room)
     });
+    return;
+  }
+
+  if (req.method === 'GET' && req.url.startsWith('/player-history')) {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const code = (url.searchParams.get('code') || '').toUpperCase();
+    const hostToken = url.searchParams.get('hostToken') || '';
+    const name = url.searchParams.get('name') || '';
+    const room = rooms.get(code);
+    if (!room) return send(res, 404, { error: 'room not found' });
+    if (room.hostToken !== hostToken) return send(res, 403, { error: 'not authorized' });
+    const log = room.answerLog.get(name);
+    if (!log) return send(res, 404, { error: 'no history for that player' });
+    send(res, 200, { name, answers: log });
     return;
   }
 
@@ -265,35 +385,57 @@ function handleAPI(req, res) {
       if (room.hostToken !== body.hostToken) {
         return send(res, 403, { error: 'not authorized' });
       }
-      if (room.status === 'question') {
-        return send(res, 400, { error: 'a round is already in progress' });
+      if (room.status === 'active') {
+        return send(res, 400, { error: 'the game is already in progress' });
+      }
+      if (room.status === 'complete') {
+        return send(res, 400, { error: 'this game has ended; create a new room to play again' });
       }
       const names = [...room.players.keys()];
       if (names.length < 2) {
         return send(res, 400, { error: 'need at least 2 players to start' });
       }
-      let pool = names.filter(n => !room.usedFacts.has(n));
-      if (pool.length === 0) {
-        room.usedFacts.clear();
-        pool = names;
+
+      room.queues = new Map();
+      room.progress = new Map();
+      room.answerLog = new Map();
+      for (const n of names) {
+        room.queues.set(n, shuffle(names.filter(x => x !== n)));
+        room.progress.set(n, 0);
+        room.answerLog.set(n, []);
       }
-      const target = pool[Math.floor(Math.random() * pool.length)];
-      room.usedFacts.add(target);
-      room.currentAnswer = target;
-      room.currentFact = room.players.get(target).fact;
-      room.answered = new Map();
-      room.eligibleCount = names.length - 1;
-      room.status = 'question';
-      room.round += 1;
+      room.status = 'active';
+      room.endsAt = Date.now() + room.roundSeconds * 1000;
       room.lastActivity = Date.now();
-      broadcastEach(code, client => ({
-        type: 'question',
-        fact: room.currentFact,
-        options: names,
-        round: room.round,
-        isSubject: client.name === target
-      }));
-      send(res, 200, { ok: true });
+
+      broadcastEach(code, client => {
+        const queue = room.queues.get(client.name);
+        if (!queue) {
+          return {
+            type: 'round-started',
+            endsAt: room.endsAt,
+            musicEnabled: room.musicEnabled
+          };
+        }
+        return {
+          type: 'question',
+          fact: room.players.get(queue[0]).fact,
+          options: rosterList(room),
+          questionIndex: 1,
+          totalQuestions: queue.length,
+          endsAt: room.endsAt,
+          musicEnabled: room.musicEnabled
+        };
+      });
+
+      clearRoomTimer(room);
+      room.timer = setTimeout(() => {
+        const current = rooms.get(code);
+        if (current === room && room.status === 'active') finalizeGame(room, code);
+      }, room.roundSeconds * 1000 + 250);
+      room.timer.unref?.();
+
+      send(res, 200, { ok: true, endsAt: room.endsAt });
     });
     return;
   }
@@ -306,53 +448,58 @@ function handleAPI(req, res) {
       const guess = String(body.guess || '');
       const room = rooms.get(code);
       if (!room) return send(res, 404, { error: 'room not found' });
-      if (room.status !== 'question') {
-        return send(res, 400, { error: 'no round in progress' });
-      }
+      if (room.status !== 'active') return send(res, 400, { error: 'no round in progress' });
       if (!room.players.has(name)) return send(res, 400, { error: 'unknown player' });
-      if (name === room.currentAnswer) {
-        return send(res, 400, { error: "you can't guess your own fact" });
+      const queue = room.queues.get(name);
+      const idx = room.progress.get(name);
+      if (!queue || idx === undefined) {
+        return send(res, 400, { error: 'you joined after this round started' });
       }
-      if (room.answered.has(name)) {
-        return send(res, 400, { error: 'you already answered this round' });
+      if (idx >= queue.length) {
+        return send(res, 400, { error: 'you already answered all your questions' });
       }
       if (!room.players.has(guess)) return send(res, 400, { error: 'invalid option' });
 
-      const answerName = room.currentAnswer;
-      const correct = guess === answerName;
-      if (correct) {
-        room.players.get(name).score += 1;
-      }
-      room.answered.set(name, { guess, correct });
-      room.lastActivity = Date.now();
-      broadcastAll(code, {
-        type: 'player-answered',
-        name,
-        answeredCount: room.answered.size,
-        totalEligible: room.eligibleCount
+      const subject = queue[idx];
+      const correct = guess === subject;
+      if (correct) room.players.get(name).score += 1;
+      room.answerLog.get(name).push({
+        subject,
+        fact: room.players.get(subject).fact,
+        guess,
+        correct
       });
-      if (room.answered.size >= room.eligibleCount) {
-        finalizeRound(room, code);
-      }
-      send(res, 200, { correct, answer: answerName });
-    });
-    return;
-  }
+      room.progress.set(name, idx + 1);
+      room.lastActivity = Date.now();
 
-  if (req.method === 'POST' && req.url === '/reveal') {
-    parseBody(req, (err, body) => {
-      if (err) return send(res, 400, { error: 'invalid request body' });
-      const code = String(body.code || '').toUpperCase();
-      const room = rooms.get(code);
-      if (!room) return send(res, 404, { error: 'room not found' });
-      if (room.hostToken !== body.hostToken) {
-        return send(res, 403, { error: 'not authorized' });
+      const finishedNow = idx + 1 >= queue.length;
+      broadcastAll(code, {
+        type: 'player-progress',
+        name,
+        finished: finishedNow,
+        completedCount: completedCount(room),
+        totalPlayers: room.players.size
+      });
+
+      if (completedCount(room) >= room.players.size) {
+        finalizeGame(room, code);
       }
-      if (room.status !== 'question') {
-        return send(res, 400, { error: 'no round in progress' });
+
+      if (finishedNow) {
+        send(res, 200, { correct, answer: subject, finished: true });
+      } else {
+        const nextSubject = queue[idx + 1];
+        send(res, 200, {
+          correct,
+          answer: subject,
+          finished: false,
+          next: {
+            fact: room.players.get(nextSubject).fact,
+            questionIndex: idx + 2,
+            totalQuestions: queue.length
+          }
+        });
       }
-      finalizeRound(room, code);
-      send(res, 200, { ok: true });
     });
     return;
   }
@@ -366,11 +513,10 @@ function handleAPI(req, res) {
       if (room.hostToken !== body.hostToken) {
         return send(res, 403, { error: 'not authorized' });
       }
-      room.status = 'complete';
-      room.currentAnswer = null;
-      room.currentFact = null;
-      room.lastActivity = Date.now();
-      broadcastAll(code, { type: 'game-over', leaderboard: getLeaderboard(room) });
+      if (room.status === 'complete') {
+        return send(res, 400, { error: 'this game has already ended' });
+      }
+      finalizeGame(room, code);
       send(res, 200, { ok: true });
     });
     return;
@@ -401,7 +547,7 @@ function handleAPI(req, res) {
       if (!room.players.has(name)) return send(res, 404, { error: 'player not found' });
       room.players.delete(name);
       room.lastActivity = Date.now();
-      broadcastAll(code, { type: 'roster', players: [...room.players.keys()] });
+      broadcastAll(code, { type: 'roster', players: rosterList(room) });
       broadcastAll(code, { type: 'leaderboard', leaderboard: getLeaderboard(room) });
       send(res, 200, { ok: true });
     });
@@ -422,12 +568,13 @@ function requestListener(req, res) {
   }
   if (
     pathname.startsWith('/create-room') ||
+    pathname.startsWith('/verify-password') ||
     pathname.startsWith('/join-room') ||
     pathname.startsWith('/room-state') ||
+    pathname.startsWith('/player-history') ||
     pathname.startsWith('/events') ||
     pathname.startsWith('/start') ||
     pathname.startsWith('/answer') ||
-    pathname.startsWith('/reveal') ||
     pathname.startsWith('/end') ||
     pathname.startsWith('/delete-room') ||
     pathname.startsWith('/remove-me')

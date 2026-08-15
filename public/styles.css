@@ -28,7 +28,6 @@ body {
   min-height: 100vh;
   color: var(--ink);
   background: linear-gradient(160deg, var(--page-bg-1), var(--page-bg-2) 60%);
-  background-attachment: fixed;
 }
 
 .page {
@@ -162,7 +161,9 @@ form {
 }
 
 input[type='text'],
-input[type='password'] {
+input[type='password'],
+input[type='number'],
+select {
   font-family: inherit;
   font-size: 1rem;
   padding: 12px 14px;
@@ -173,10 +174,195 @@ input[type='password'] {
 }
 
 input[type='text']:focus,
-input[type='password']:focus {
+input[type='password']:focus,
+input[type='number']:focus,
+select:focus {
   outline: none;
   border-color: var(--purple);
   background: #ffffff;
+}
+
+.icon-picker {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+}
+
+.icon-picker button {
+  min-height: 0;
+  padding: 6px 0;
+  font-size: 1.3rem;
+  background: #faf9ff;
+  border: 2px solid #e4e0fb;
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.icon-picker button:hover:not(:disabled) {
+  transform: none;
+  border-color: var(--purple);
+}
+
+.icon-picker button.selected {
+  background: var(--purple);
+  border-color: var(--purple-dark);
+}
+
+.player-avatar {
+  font-size: 1.15rem;
+  margin-right: 6px;
+}
+
+.library-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.library-list li:hover {
+  background: #eeeaff;
+}
+
+.library-list .lib-icon {
+  font-size: 1.3rem;
+  margin-right: 8px;
+}
+
+.library-list .lib-meta {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.library-list .lib-name {
+  font-weight: 600;
+}
+
+.library-list .lib-sub {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.timer-wrap {
+  text-align: center;
+  margin-top: 14px;
+}
+
+.timer {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 2.6rem;
+  font-weight: 700;
+  color: var(--purple);
+  margin: 4px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 10px;
+  margin: 16px 0 6px;
+}
+
+.podium-spot {
+  flex: 1;
+  max-width: 120px;
+  border-radius: 12px;
+  padding: 12px 8px;
+  text-align: center;
+  cursor: pointer;
+  color: white;
+  transition: transform 0.1s ease;
+}
+
+.podium-spot:hover {
+  transform: translateY(-3px);
+}
+
+.podium-spot.place-1 {
+  background: linear-gradient(160deg, #ffd447, #f5b301);
+  padding-top: 20px;
+  padding-bottom: 22px;
+  order: 2;
+}
+
+.podium-spot.place-2 {
+  background: linear-gradient(160deg, #d7dbe3, #a7adba);
+  order: 1;
+}
+
+.podium-spot.place-3 {
+  background: linear-gradient(160deg, #e3a97a, #c17a45);
+  order: 3;
+}
+
+.podium-medal {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.podium-avatar {
+  font-size: 1.8rem;
+  margin: 2px 0;
+}
+
+.podium-name {
+  font-weight: 700;
+  font-family: 'Space Grotesk', sans-serif;
+  margin-top: 4px;
+  word-break: break-word;
+}
+
+.podium-score {
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.history-entry {
+  list-style: none;
+  background: #f6f5ff;
+  border-left: 4px solid var(--muted);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.history-entry.correct {
+  border-left-color: var(--green);
+}
+
+.history-entry.wrong {
+  border-left-color: var(--red);
+}
+
+.history-fact {
+  font-style: italic;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.history-row {
+  font-size: 0.9rem;
+  display: flex;
+  gap: 6px;
+}
+
+.history-label {
+  color: var(--muted);
+  min-width: 100px;
+}
+
+.history-value {
+  font-weight: 600;
+}
+
+.history-correct-tag {
+  color: var(--green);
+  font-weight: 700;
 }
 
 .error {
@@ -199,6 +385,24 @@ input[type='password']:focus {
   align-items: center;
   gap: 10px;
   text-align: center;
+}
+
+.icon-badge {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
+  background: linear-gradient(135deg, var(--yellow), var(--red));
+  box-shadow: 0 6px 16px rgba(31, 17, 71, 0.25);
+}
+
+.icon-badge.small {
+  width: 48px;
+  height: 48px;
+  font-size: 1.5rem;
 }
 
 .code-block .label {
