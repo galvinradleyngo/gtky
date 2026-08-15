@@ -10,7 +10,11 @@
 <body>
   <a class="back" href="/">&larr; Home</a>
   <h1>Host Game</h1>
-  <button id="create" class="primary">Create Room</button>
+  <form id="createForm">
+    <input type="password" id="roomPassword" placeholder="Room Password (optional)" maxlength="60" />
+    <button type="submit" class="primary">Create Room</button>
+  </form>
+  <p class="hint">Data note: game data is not stored long-term. It lives in memory only while the game is running and is automatically deleted no later than 2 weeks after creation &mdash; often much sooner (e.g. when the server restarts or the room sits idle).</p>
 
   <div id="room" class="hidden">
     <div class="join-panel">
@@ -24,6 +28,7 @@
         <button id="copyLink" type="button">Copy Link</button>
       </div>
       <p class="hint">Players scan the QR code or open the link to join instantly.</p>
+      <p id="passwordBadge" class="hint hidden">🔒 This room requires the password you set to join.</p>
     </div>
 
     <section>
@@ -35,9 +40,11 @@
       <button id="start" class="primary">Start Round</button>
       <button id="reveal" class="secondary hidden">Reveal Now</button>
       <button id="end" class="danger">End Game</button>
+      <button id="deleteRoom" class="danger">Delete Game Data</button>
     </section>
 
     <p id="roundStatus" class="hint"></p>
+    <p id="retentionNotice" class="hint hidden"></p>
 
     <section id="revealPanel" class="hidden">
       <h2>Round Result</h2>

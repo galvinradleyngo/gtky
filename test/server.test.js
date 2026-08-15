@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import http from 'node:http';
-import { createServer } from '../server.js';
+import { createServer, isRoomStale, MAX_ROOM_AGE_MS } from '../server.js';
 
 async function withServer(fn) {
   const server = createServer();
@@ -213,4 +213,105 @@ test('end game broadcasts completion and blocks further starts without a valid t
     const state = await (await fetch(base + `/room-state?code=${code}`)).json();
     assert.strictEqual(state.status, 'complete');
   });
+});
+
+test('password-protected rooms reject joins with a missing or wrong password', async () => {
+  await withServer(async base => {
+    const create = await fetch(base + '/create-room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: 'letmein' })
+    });
+    const { code, passwordProtected } = await create.json();
+    assert.strictEqual(passwordProtected, true);
+
+    const noPassword = await postJSON(base, '/join-room', { code, name: 'Ana', fact: 'x' });
+    assert.strictEqual(noPassword.status, 403);
+
+    const wrongPassword = await postJSON(base, '/join-room', {
+      code,
+      name: 'Ana',
+      fact: 'x',
+      password: 'nope'
+    });
+    assert.strictEqual(wrongPassword.status, 403);
+
+    const rightPassword = await postJSON(base, '/join-room', {
+      code,
+      name: 'Ana',
+      fact: 'x',
+      password: 'letmein'
+    });
+    assert.strictEqual(rightPassword.status, 200);
+  });
+});
+
+test('rooms without a password accept joins with or without a password field', async () => {
+  await withServer(async base => {
+    const create = await fetch(base + '/create-room', { method: 'POST' });
+    const { code, passwordProtected } = await create.json();
+    assert.strictEqual(passwordProtected, false);
+    const res = await postJSON(base, '/join-room', { code, name: 'Ana', fact: 'x' });
+    assert.strictEqual(res.status, 200);
+    const res2 = await postJSON(base, '/join-room', {
+      code,
+      name: 'Bo',
+      fact: 'x',
+      password: 'whatever'
+    });
+    assert.strictEqual(res2.status, 200);
+  });
+});
+
+test('host can delete a room; only the host token is authorized to do it', async () => {
+  await withServer(async base => {
+    const create = await fetch(base + '/create-room', { method: 'POST' });
+    const { code, hostToken } = await create.json();
+    await postJSON(base, '/join-room', { code, name: 'Ana', fact: 'likes tea' });
+
+    const badToken = await postJSON(base, '/delete-room', { code, hostToken: 'wrong' });
+    assert.strictEqual(badToken.status, 403);
+
+    const ok = await postJSON(base, '/delete-room', { code, hostToken });
+    assert.strictEqual(ok.status, 200);
+
+    const gone = await fetch(base + `/room-state?code=${code}`);
+    assert.strictEqual(gone.status, 404);
+  });
+});
+
+test('a player can remove just their own data without affecting others', async () => {
+  await withServer(async base => {
+    const create = await fetch(base + '/create-room', { method: 'POST' });
+    const { code } = await create.json();
+    await postJSON(base, '/join-room', { code, name: 'Ana', fact: 'likes tea' });
+    await postJSON(base, '/join-room', { code, name: 'Bo', fact: 'likes cats' });
+
+    const missing = await postJSON(base, '/remove-me', { code, name: 'Nobody' });
+    assert.strictEqual(missing.status, 404);
+
+    const removed = await postJSON(base, '/remove-me', { code, name: 'Ana' });
+    assert.strictEqual(removed.status, 200);
+
+    const state = await (await fetch(base + `/room-state?code=${code}`)).json();
+    assert.strictEqual(state.players.length, 1);
+    assert.strictEqual(state.players[0].name, 'Bo');
+  });
+});
+
+test('room data never outlives the 2-week hard cap regardless of activity', () => {
+  const now = Date.now();
+  const freshButActive = {
+    clients: [{ res: {} }],
+    lastActivity: now,
+    createdAt: now - (MAX_ROOM_AGE_MS + 1000)
+  };
+  assert.strictEqual(isRoomStale(freshButActive, now), true);
+
+  const brandNewIdle = {
+    clients: [],
+    lastActivity: now,
+    createdAt: now
+  };
+  assert.strictEqual(isRoomStale(brandNewIdle, now), false);
 });

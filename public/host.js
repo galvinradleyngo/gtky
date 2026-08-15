@@ -1,15 +1,19 @@
-const createBtn = document.getElementById('create');
+const createForm = document.getElementById('createForm');
+const roomPasswordInput = document.getElementById('roomPassword');
 const roomDiv = document.getElementById('room');
 const codeSpan = document.getElementById('code');
 const qrImg = document.getElementById('qr');
 const joinUrlInput = document.getElementById('joinUrl');
 const copyLinkBtn = document.getElementById('copyLink');
+const passwordBadge = document.getElementById('passwordBadge');
 const playersList = document.getElementById('players');
 const playerCountEl = document.getElementById('playerCount');
 const startBtn = document.getElementById('start');
 const revealBtn = document.getElementById('reveal');
 const endBtn = document.getElementById('end');
+const deleteRoomBtn = document.getElementById('deleteRoom');
 const roundStatusEl = document.getElementById('roundStatus');
+const retentionNoticeEl = document.getElementById('retentionNotice');
 const revealPanel = document.getElementById('revealPanel');
 const revealAnswerEl = document.getElementById('revealAnswer');
 const revealResultsEl = document.getElementById('revealResults');
@@ -21,6 +25,10 @@ let source = null;
 
 function saveSession() {
   sessionStorage.setItem('gtky-host', JSON.stringify({ code, hostToken }));
+}
+
+function clearSession() {
+  sessionStorage.removeItem('gtky-host');
 }
 
 function renderPlayers(names) {
@@ -42,11 +50,12 @@ function renderLeaderboard(leaderboard) {
   });
 }
 
-function openRoomPanel({ code: c, joinUrl, qrCode }) {
+function openRoomPanel({ code: c, joinUrl, qrCode, passwordProtected }) {
   code = c;
   codeSpan.textContent = code;
   if (joinUrl) joinUrlInput.value = joinUrl;
   if (qrCode) qrImg.src = qrCode;
+  passwordBadge.classList.toggle('hidden', !passwordProtected);
   roomDiv.classList.remove('hidden');
 }
 
@@ -88,21 +97,35 @@ function connectEvents() {
       startBtn.disabled = true;
       revealBtn.classList.add('hidden');
       renderLeaderboard(msg.leaderboard);
+      retentionNoticeEl.textContent =
+        "This game's data (names, facts, and scores) will be deleted automatically within 2 weeks. If it contains personal info you'd like removed sooner, use \"Delete Game Data\" above.";
+      retentionNoticeEl.classList.remove('hidden');
+    }
+    if (msg.type === 'room-deleted') {
+      clearSession();
+      alert("This game's data has been deleted.");
+      location.reload();
     }
   };
 }
 
-createBtn.onclick = async () => {
-  createBtn.disabled = true;
+createForm.onsubmit = async e => {
+  e.preventDefault();
+  const submitBtn = createForm.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
   try {
-    const res = await fetch('/create-room', { method: 'POST' });
+    const res = await fetch('/create-room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: roomPasswordInput.value })
+    });
     const data = await res.json();
     hostToken = data.hostToken;
     openRoomPanel(data);
     saveSession();
     connectEvents();
   } finally {
-    createBtn.disabled = false;
+    submitBtn.disabled = false;
   }
 };
 
@@ -148,6 +171,29 @@ endBtn.onclick = async () => {
   if (data.error) alert(data.error);
 };
 
+deleteRoomBtn.onclick = async () => {
+  if (
+    !confirm(
+      "Permanently delete this game's data (players, facts, scores) now? This can't be undone."
+    )
+  )
+    return;
+  if (source) source.close();
+  const res = await fetch('/delete-room', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, hostToken })
+  });
+  const data = await res.json();
+  if (data.error) {
+    alert(data.error);
+    return;
+  }
+  clearSession();
+  alert('Game data deleted.');
+  location.reload();
+};
+
 window.addEventListener('DOMContentLoaded', async () => {
   const saved = sessionStorage.getItem('gtky-host');
   if (!saved) return;
@@ -155,7 +201,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const { code: savedCode, hostToken: savedToken } = JSON.parse(saved);
     const res = await fetch(`/room-state?code=${savedCode}`);
     if (!res.ok) {
-      sessionStorage.removeItem('gtky-host');
+      clearSession();
       return;
     }
     const state = await res.json();
@@ -169,6 +215,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     connectEvents();
   } catch {
-    sessionStorage.removeItem('gtky-host');
+    clearSession();
   }
 });

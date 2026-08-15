@@ -14,9 +14,11 @@
     <input type="text" name="code" placeholder="Room Code" maxlength="4" required />
     <input type="text" name="name" placeholder="Your Name" maxlength="40" required />
     <input type="text" name="fact" placeholder="Fun Fact About You" maxlength="280" required />
+    <input type="password" name="password" placeholder="Room Password (if set)" maxlength="60" />
     <button type="submit" class="primary">Join</button>
   </form>
   <p id="joinError" class="error hidden"></p>
+  <p class="hint">Data note: your name, fact, and score are stored only in memory while this game runs, and are automatically deleted no later than 2 weeks after the room was created.</p>
 
   <div id="game" class="hidden">
     <p id="waiting" class="hint">Waiting for the host to start a round...</p>
@@ -28,6 +30,9 @@
     <div id="finalPanel" class="hidden">
       <h2>Final Leaderboard</h2>
       <ul id="finalLeaderboard"></ul>
+      <p class="hint">Your data will be deleted automatically within 2 weeks. Want it gone sooner?</p>
+      <button id="removeMe" type="button" class="danger">Remove My Data</button>
+      <p id="removeStatus" class="hint hidden"></p>
     </div>
   </div>
   <script src="/player.js"></script>
