@@ -8,15 +8,47 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <a class="back" href="/">&larr; Home</a>
   <h1>Host Game</h1>
-  <button id="create">Create Room</button>
+  <button id="create" class="primary">Create Room</button>
+
   <div id="room" class="hidden">
-    <p>Room Code: <span id="code"></span></p>
-    <h2>Players</h2>
-    <ul id="players"></ul>
-    <button id="start">Start Round</button>
-    <h2>Leaderboard</h2>
-    <ul id="leaderboard"></ul>
+    <div class="join-panel">
+      <div class="code-block">
+        <p class="label">Room Code</p>
+        <p id="code" class="code"></p>
+      </div>
+      <img id="qr" class="qr" alt="QR code to join the game" />
+      <div class="link-row">
+        <input id="joinUrl" type="text" readonly />
+        <button id="copyLink" type="button">Copy Link</button>
+      </div>
+      <p class="hint">Players scan the QR code or open the link to join instantly.</p>
+    </div>
+
+    <section>
+      <h2>Players (<span id="playerCount">0</span>)</h2>
+      <ul id="players"></ul>
+    </section>
+
+    <section class="controls">
+      <button id="start" class="primary">Start Round</button>
+      <button id="reveal" class="secondary hidden">Reveal Now</button>
+      <button id="end" class="danger">End Game</button>
+    </section>
+
+    <p id="roundStatus" class="hint"></p>
+
+    <section id="revealPanel" class="hidden">
+      <h2>Round Result</h2>
+      <p id="revealAnswer"></p>
+      <ul id="revealResults"></ul>
+    </section>
+
+    <section>
+      <h2>Leaderboard</h2>
+      <ul id="leaderboard"></ul>
+    </section>
   </div>
   <script src="/host.js"></script>
 </body>
