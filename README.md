@@ -1,6 +1,8 @@
 # gtky
 
-Gotten to Know You is a lightweight quiz game for classrooms. Participants submit a fun fact about themselves and then guess who the fact belongs to.
+Gotten to Know You is a lightweight, Kahoot-style icebreaker quiz. Everyone
+submits a fun fact about themselves, then races through a personal quiz —
+guessing who each *other* fact belongs to — before a shared timer runs out.
 
 ## Running
 
@@ -12,27 +14,40 @@ Then open `http://localhost:3000` in a browser.
 
 ## Features
 - Create a room and share it via room code, short link, or QR code
-- Join with your name and a single fun fact, from any device
-- Host starts rounds where a random fact is shown
-- Players guess which participant matches the fact (each player answers once, and can't guess their own fact)
-- The correct answer is only revealed once everyone has guessed, or the host forces a reveal
-- Leaderboard updates in real time
-- Host actions (start/reveal/end/delete) are protected by a per-room host token
-- Rooms can optionally be password protected at creation, no accounts needed
+- Name the room, optionally password protect it, set the round timer, and
+  toggle background music — no accounts needed
+- Every room gets a random icon as its logo, shown to host and players alike
+- Join with a name and a single fun fact, from any device
+- Once the host starts the game, each player gets their own shuffled quiz —
+  every other player's fact, but never their own — and answers at their own
+  pace against a shared countdown
+- Instant private feedback after every guess (right/wrong + the real answer)
+- The game ends when the timer runs out or everyone finishes, whichever
+  comes first, or the host can end it early
+- An Olympics-style podium reveals the top 3; the host can tap any of them
+  to see exactly what they guessed on each question
+- Live leaderboard throughout
+- Host actions (start/end/delete) are protected by a per-room host token
+- The host's browser remembers rooms it created (a small local "library"),
+  so reopening host.html offers to resume a saved game — password required
+  if the room has one — instead of always starting fresh
 
 ## Data retention
 
-There's no database — everything (room codes, names, facts, scores) lives
-only in the server's memory while it's running, and disappears the moment
-the process restarts or a free-tier instance spins down from inactivity.
-On top of that, the server automatically deletes any room 2 weeks after it
-was created, whichever comes first, so nothing ever outlives that window.
+There's no database — everything lives only in the server's memory while
+it's running, and disappears the moment the process restarts or a free-tier
+instance spins down from inactivity. On top of that, the server automatically
+deletes any room 2 weeks after it was created, whichever comes first, so
+nothing ever outlives that window.
 
-Because game data can include personal details players typed in themselves,
-both sides can also delete it early, before that automatic cleanup:
+Beyond that backstop, participants' fun facts are personal, so they're
+erased from the server immediately when a game ends — win, lose, or the host
+stops it early. Names and scores stick around only long enough to show the
+final leaderboard/podium (and let the host review who guessed what), and can
+be wiped early too:
 - **Host**: "Delete Game Data" wipes the whole room immediately.
 - **Player**: "Remove My Data" on the end-of-game screen removes just that
-  player's own name, fact, and score.
+  player's own name and score.
 
 ## Deploying (Render, free tier)
 

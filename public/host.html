@@ -12,49 +12,82 @@
     <a class="back" href="/">&larr; Home</a>
     <h1>Host Game</h1>
 
-    <div class="card">
+    <div id="libraryChooser" class="card hidden">
+      <h2>Welcome back!</h2>
+      <p class="hint">Continue a saved game or start a fresh one.</p>
+      <ul id="libraryList" class="library-list"></ul>
+      <button id="showCreateForm" type="button" class="secondary" style="margin-top: 10px;">Start New Game</button>
+    </div>
+
+    <div id="createCard" class="card hidden">
       <form id="createForm">
+        <input type="text" id="roomName" placeholder="Room Name (optional)" maxlength="60" />
         <input type="password" id="roomPassword" placeholder="Room Password (optional)" maxlength="60" />
+        <label class="hint" for="roundSeconds" style="text-align: left; margin-bottom: -4px;">Round timer</label>
+        <select id="roundSeconds">
+          <option value="60">1 minute</option>
+          <option value="120">2 minutes</option>
+          <option value="180" selected>3 minutes</option>
+          <option value="300">5 minutes</option>
+          <option value="600">10 minutes</option>
+        </select>
+        <label class="hint" style="text-align: left; display: flex; align-items: center; gap: 8px; margin: 4px 0 -4px;">
+          <input type="checkbox" id="musicEnabled" style="width: auto;" />
+          🎵 Play background music during the round
+        </label>
         <button type="submit" class="primary">Create Room</button>
       </form>
-      <p class="hint" style="margin-top: 10px;">Data note: game data is not stored long-term. It lives in memory only while the game is running and is automatically deleted no later than 2 weeks after creation &mdash; often much sooner (e.g. when the server restarts or the room sits idle).</p>
+      <p class="hint" style="margin-top: 10px;">Data note: players' fun facts are erased the moment this game ends. Names, scores, and the room itself are deleted automatically no later than 2 weeks after creation &mdash; often much sooner (e.g. when the server restarts, the room sits idle, or you delete it yourself below).</p>
     </div>
 
     <div id="room" class="hidden">
       <div class="card join-panel">
+        <div id="gameIcon" class="icon-badge"></div>
+        <h2 id="roomNameDisplay" class="hidden"></h2>
         <div class="code-block">
           <p class="label">Room Code</p>
           <p id="code" class="code"></p>
         </div>
-        <img id="qr" class="qr" alt="QR code to join the game" />
-        <div class="link-row">
-          <input id="joinUrl" type="text" readonly />
-          <button id="copyLink" type="button">Copy Link</button>
+        <div id="joinPanelExtra">
+          <img id="qr" class="qr" alt="QR code to join the game" />
+          <div class="link-row">
+            <input id="joinUrl" type="text" readonly />
+            <button id="copyLink" type="button">Copy Link</button>
+          </div>
+          <p class="hint">Players scan the QR code or open the link to join instantly.</p>
+          <p id="passwordBadge" class="hint hidden">🔒 This room requires the password you set to join.</p>
         </div>
-        <p class="hint">Players scan the QR code or open the link to join instantly.</p>
-        <p id="passwordBadge" class="hint hidden">🔒 This room requires the password you set to join.</p>
       </div>
 
       <section class="card">
         <h2>Players (<span id="playerCount">0</span>)</h2>
-        <ul id="players"></ul>
+        <ul id="players" class="players-list"></ul>
       </section>
 
       <section class="card">
         <div class="controls">
-          <button id="start" class="primary">Start Round</button>
-          <button id="reveal" class="secondary hidden">Reveal Now</button>
-          <button id="end" class="danger">End Game</button>
+          <button id="start" class="primary">Start Game</button>
+          <button id="end" class="danger hidden">End Now</button>
           <button id="deleteRoom" class="danger">Delete Game Data</button>
         </div>
-        <p id="roundStatus" class="hint"></p>
+        <div id="timerWrap" class="timer-wrap hidden">
+          <p id="timer" class="timer">--:--</p>
+          <p id="progressStatus" class="hint"></p>
+          <button id="muteMusic" type="button" class="secondary hidden">🔇 Mute Music</button>
+        </div>
         <p id="retentionNotice" class="hint hidden"></p>
       </section>
 
-      <section id="revealPanel" class="card hidden">
-        <h2>Round Result</h2>
-        <p id="revealAnswer"></p>
-        <ul id="revealResults"></ul>
+      <section id="podiumPanel" class="card hidden">
+        <h2>🏆 Final Results</h2>
+        <div id="podium" class="podium"></div>
+        <p class="hint">Tap a podium finisher to see what they guessed.</p>
+      </section>
+
+      <section id="historyPanel" class="card hidden">
+        <h2 id="historyName"></h2>
+        <ul id="historyList"></ul>
+        <button id="closeHistory" type="button" class="secondary">Close</button>
       </section>
 
       <section class="card">
@@ -63,6 +96,7 @@
       </section>
     </div>
   </div>
+  <script src="/music.js"></script>
   <script src="/host.js"></script>
 </body>
 </html>
