@@ -8,54 +8,60 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <a class="back" href="/">&larr; Home</a>
-  <h1>Host Game</h1>
-  <form id="createForm">
-    <input type="password" id="roomPassword" placeholder="Room Password (optional)" maxlength="60" />
-    <button type="submit" class="primary">Create Room</button>
-  </form>
-  <p class="hint">Data note: game data is not stored long-term. It lives in memory only while the game is running and is automatically deleted no later than 2 weeks after creation &mdash; often much sooner (e.g. when the server restarts or the room sits idle).</p>
+  <div class="page">
+    <a class="back" href="/">&larr; Home</a>
+    <h1>Host Game</h1>
 
-  <div id="room" class="hidden">
-    <div class="join-panel">
-      <div class="code-block">
-        <p class="label">Room Code</p>
-        <p id="code" class="code"></p>
-      </div>
-      <img id="qr" class="qr" alt="QR code to join the game" />
-      <div class="link-row">
-        <input id="joinUrl" type="text" readonly />
-        <button id="copyLink" type="button">Copy Link</button>
-      </div>
-      <p class="hint">Players scan the QR code or open the link to join instantly.</p>
-      <p id="passwordBadge" class="hint hidden">🔒 This room requires the password you set to join.</p>
+    <div class="card">
+      <form id="createForm">
+        <input type="password" id="roomPassword" placeholder="Room Password (optional)" maxlength="60" />
+        <button type="submit" class="primary">Create Room</button>
+      </form>
+      <p class="hint" style="margin-top: 10px;">Data note: game data is not stored long-term. It lives in memory only while the game is running and is automatically deleted no later than 2 weeks after creation &mdash; often much sooner (e.g. when the server restarts or the room sits idle).</p>
     </div>
 
-    <section>
-      <h2>Players (<span id="playerCount">0</span>)</h2>
-      <ul id="players"></ul>
-    </section>
+    <div id="room" class="hidden">
+      <div class="card join-panel">
+        <div class="code-block">
+          <p class="label">Room Code</p>
+          <p id="code" class="code"></p>
+        </div>
+        <img id="qr" class="qr" alt="QR code to join the game" />
+        <div class="link-row">
+          <input id="joinUrl" type="text" readonly />
+          <button id="copyLink" type="button">Copy Link</button>
+        </div>
+        <p class="hint">Players scan the QR code or open the link to join instantly.</p>
+        <p id="passwordBadge" class="hint hidden">🔒 This room requires the password you set to join.</p>
+      </div>
 
-    <section class="controls">
-      <button id="start" class="primary">Start Round</button>
-      <button id="reveal" class="secondary hidden">Reveal Now</button>
-      <button id="end" class="danger">End Game</button>
-      <button id="deleteRoom" class="danger">Delete Game Data</button>
-    </section>
+      <section class="card">
+        <h2>Players (<span id="playerCount">0</span>)</h2>
+        <ul id="players"></ul>
+      </section>
 
-    <p id="roundStatus" class="hint"></p>
-    <p id="retentionNotice" class="hint hidden"></p>
+      <section class="card">
+        <div class="controls">
+          <button id="start" class="primary">Start Round</button>
+          <button id="reveal" class="secondary hidden">Reveal Now</button>
+          <button id="end" class="danger">End Game</button>
+          <button id="deleteRoom" class="danger">Delete Game Data</button>
+        </div>
+        <p id="roundStatus" class="hint"></p>
+        <p id="retentionNotice" class="hint hidden"></p>
+      </section>
 
-    <section id="revealPanel" class="hidden">
-      <h2>Round Result</h2>
-      <p id="revealAnswer"></p>
-      <ul id="revealResults"></ul>
-    </section>
+      <section id="revealPanel" class="card hidden">
+        <h2>Round Result</h2>
+        <p id="revealAnswer"></p>
+        <ul id="revealResults"></ul>
+      </section>
 
-    <section>
-      <h2>Leaderboard</h2>
-      <ul id="leaderboard"></ul>
-    </section>
+      <section class="card">
+        <h2>Leaderboard</h2>
+        <ul id="leaderboard"></ul>
+      </section>
+    </div>
   </div>
   <script src="/host.js"></script>
 </body>

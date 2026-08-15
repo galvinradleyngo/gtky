@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gotten to Know You</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --purple: #5b3df5;
+    --purple-dark: #4527d6;
+    --blue: #2563eb;
+    --red: #ef4444;
+    --yellow: #f5b301;
+    --green: #16a34a;
+    --ink: #1f1147;
+    --muted: #6b6383;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    padding: 24px 16px 48px;
+    min-height: 100vh;
+    color: var(--ink);
+    background: linear-gradient(160deg, #6a4bf5, #9333ea 60%);
+    background-attachment: fixed;
+  }
+  .page { max-width: 480px; margin: 0 auto; }
+  h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    color: #ffffff;
+    font-size: 2.1rem;
+    text-align: center;
+    margin: 8px 0 20px;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
+  }
+  h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 1.1rem;
+    margin: 0 0 10px;
+  }
+  .card {
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 12px 30px rgba(31, 17, 71, 0.25);
+    padding: 22px;
+    margin-bottom: 16px;
+  }
+  p { line-height: 1.5; }
+  .play-btn {
+    display: block;
+    text-align: center;
+    padding: 18px 20px;
+    background: var(--purple);
+    color: white;
+    text-decoration: none;
+    border-radius: 999px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 1.2rem;
+    box-shadow: 0 4px 0 var(--purple-dark);
+    transition: transform 0.12s ease;
+  }
+  .play-btn:hover { transform: translateY(-2px); }
+  .play-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--purple-dark); }
+  ul.features {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  ul.features li {
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #f6f5ff;
+    font-weight: 500;
+    font-size: 0.95rem;
+  }
+  .hint {
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  a.repo-link {
+    color: #ffffff;
+    opacity: 0.85;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  a.repo-link:hover { opacity: 1; }
+  .footer {
+    text-align: center;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <h1>Gotten to Know You</h1>
+
+    <div class="card">
+      <p>A live quiz game for testing what you actually know about each other. Everyone joins from their own phone — submit a fun fact, then guess whose fact is whose.</p>
+      <a class="play-btn" href="https://gtky-u0y9.onrender.com/">Play Now &rarr;</a>
+      <p class="hint" style="margin-top: 12px; margin-bottom: 0;">
+        Free hosting means the app may take 30&ndash;50 seconds to wake up if it's been idle &mdash; open it a minute before you want to start.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>How it works</h2>
+      <ul class="features">
+        <li>Host creates a room and shares a QR code or short link</li>
+        <li>Players join from any device &mdash; no accounts needed</li>
+        <li>Rooms can be password protected</li>
+        <li>Guess who each fun fact belongs to; live leaderboard updates as you go</li>
+        <li>Game data is deleted automatically within 2 weeks, sooner on request</li>
+      </ul>
+    </div>
+
+    <div class="footer">
+      <a class="repo-link" href="https://github.com/galvinradleyngo/gtky">View source on GitHub &rarr;</a>
+    </div>
+  </div>
+</body>
+</html>
