@@ -8,31 +8,38 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <a class="back" href="/">&larr; Home</a>
-  <h1>Join Game</h1>
-  <form id="joinForm">
-    <input type="text" name="code" placeholder="Room Code" maxlength="4" required />
-    <input type="text" name="name" placeholder="Your Name" maxlength="40" required />
-    <input type="text" name="fact" placeholder="Fun Fact About You" maxlength="280" required />
-    <input type="password" name="password" placeholder="Room Password (if set)" maxlength="60" />
-    <button type="submit" class="primary">Join</button>
-  </form>
-  <p id="joinError" class="error hidden"></p>
-  <p class="hint">Data note: your name, fact, and score are stored only in memory while this game runs, and are automatically deleted no later than 2 weeks after the room was created.</p>
+  <div class="page">
+    <a class="back" href="/">&larr; Home</a>
+    <h1>Join Game</h1>
 
-  <div id="game" class="hidden">
-    <p id="waiting" class="hint">Waiting for the host to start a round...</p>
-    <h2 id="question" class="hidden"></h2>
-    <p id="subjectNotice" class="hint hidden">This fact is about you! Sit back and watch everyone guess.</p>
-    <div id="options"></div>
-    <p id="status"></p>
-    <p id="progress" class="hint"></p>
-    <div id="finalPanel" class="hidden">
-      <h2>Final Leaderboard</h2>
-      <ul id="finalLeaderboard"></ul>
-      <p class="hint">Your data will be deleted automatically within 2 weeks. Want it gone sooner?</p>
-      <button id="removeMe" type="button" class="danger">Remove My Data</button>
-      <p id="removeStatus" class="hint hidden"></p>
+    <div id="joinCard" class="card">
+      <form id="joinForm">
+        <input type="text" name="code" placeholder="Room Code" maxlength="4" required />
+        <input type="text" name="name" placeholder="Your Name" maxlength="40" required />
+        <input type="text" name="fact" placeholder="Fun Fact About You" maxlength="280" required />
+        <input type="password" name="password" placeholder="Room Password (if set)" maxlength="60" />
+        <button type="submit" class="primary">Join</button>
+      </form>
+      <p id="joinError" class="error hidden" style="margin-top: 10px;"></p>
+      <p class="hint" style="margin-top: 10px;">Data note: your name, fact, and score are stored only in memory while this game runs, and are automatically deleted no later than 2 weeks after the room was created.</p>
+    </div>
+
+    <div id="game" class="hidden">
+      <div class="card">
+        <p id="waiting" class="hint">Waiting for the host to start a round...</p>
+        <h2 id="question" class="hidden"></h2>
+        <p id="subjectNotice" class="hint hidden">This fact is about you! Sit back and watch everyone guess.</p>
+        <div id="options"></div>
+        <p id="status"></p>
+        <p id="progress" class="hint"></p>
+      </div>
+      <div id="finalPanel" class="card hidden">
+        <h2>Final Leaderboard</h2>
+        <ul id="finalLeaderboard"></ul>
+        <p class="hint">Your data will be deleted automatically within 2 weeks. Want it gone sooner?</p>
+        <button id="removeMe" type="button" class="danger">Remove My Data</button>
+        <p id="removeStatus" class="hint hidden"></p>
+      </div>
     </div>
   </div>
   <script src="/player.js"></script>

@@ -1,3 +1,4 @@
+const joinCard = document.getElementById('joinCard');
 const form = document.getElementById('joinForm');
 const joinErrorEl = document.getElementById('joinError');
 const gameDiv = document.getElementById('game');
@@ -59,7 +60,7 @@ form.onsubmit = async e => {
     return;
   }
 
-  form.classList.add('hidden');
+  joinCard.classList.add('hidden');
   gameDiv.classList.remove('hidden');
   connectEvents();
 };

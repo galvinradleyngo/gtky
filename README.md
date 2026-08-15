@@ -57,3 +57,15 @@ code changes:
 Free-tier services spin down after ~15 minutes of no traffic and take
 ~30-50 seconds to wake back up on the next request, so open the host page
 a minute before you actually start a session.
+
+## GitHub Pages (landing page only)
+
+GitHub Pages can only serve static files — it can't run `server.js`, so the
+actual game has to stay on Render (above). `docs/index.html` is a small,
+static landing page with a "Play Now" button pointing at the live Render
+URL; it's meant to be published via GitHub Pages so the repo itself has a
+friendly front door.
+
+To enable it: repo **Settings → Pages → Source: Deploy from a branch →
+Branch: `main`, folder: `/docs` → Save**. That's the one step that has to
+happen in the GitHub UI — it can't be done from a commit alone.
