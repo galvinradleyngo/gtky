@@ -36,7 +36,7 @@ function send(res, status, data, type = 'application/json') {
 function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   let pathname = decodeURIComponent(url.pathname);
-  if (pathname === '/') pathname = '/index.html';
+  if (pathname === '/') pathname = '/host.html';
   const filePath = path.normalize(path.join(PUBLIC_DIR, pathname));
   if (filePath !== PUBLIC_DIR && !filePath.startsWith(PUBLIC_DIR + path.sep)) {
     send(res, 403, 'Forbidden', 'text/plain');

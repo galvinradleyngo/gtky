@@ -98,12 +98,13 @@ test('createServer returns an http server', () => {
   server.close();
 });
 
-test('serves index.html at /', async () => {
+test('serves host.html at / (host page is the site root)', async () => {
   await withServer(async base => {
     const res = await fetch(base + '/');
     assert.strictEqual(res.status, 200);
     const text = await res.text();
-    assert.match(text, /Gotten to Know You/);
+    assert.match(text, /Host Game/);
+    assert.match(text, /Joining instead/);
   });
 });
 
