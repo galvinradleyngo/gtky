@@ -9,7 +9,13 @@
   let playing = false;
 
   function unlock() {
-    if (ctx) return;
+    if (ctx) {
+      // Browsers only honor resume() reliably when it's called as a direct
+      // result of a user gesture — call it again on every gesture we get,
+      // not just the first, in case the first attempt got silently ignored.
+      ctx.resume().catch(() => {});
+      return;
+    }
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
@@ -17,6 +23,9 @@
       masterGain = ctx.createGain();
       masterGain.gain.value = 0;
       masterGain.connect(ctx.destination);
+      // Must be called within the same gesture that created the context for
+      // browsers' autoplay policies to actually unlock audio.
+      ctx.resume().catch(() => {});
     } catch {
       ctx = null;
     }

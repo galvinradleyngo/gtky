@@ -9,6 +9,7 @@ const createForm = document.getElementById('createForm');
 const roomNameInput = document.getElementById('roomName');
 const roomPasswordInput = document.getElementById('roomPassword');
 const roundSecondsInput = document.getElementById('roundSeconds');
+const maxQuestionsInput = document.getElementById('maxQuestions');
 const musicEnabledInput = document.getElementById('musicEnabled');
 const roomDiv = document.getElementById('room');
 const gameIconEl = document.getElementById('gameIcon');
@@ -29,13 +30,26 @@ const timerEl = document.getElementById('timer');
 const progressStatusEl = document.getElementById('progressStatus');
 const muteMusicBtn = document.getElementById('muteMusic');
 const retentionNoticeEl = document.getElementById('retentionNotice');
+const editSettingsBtn = document.getElementById('editSettingsBtn');
+const editSettingsPanel = document.getElementById('editSettingsPanel');
+const editSettingsForm = document.getElementById('editSettingsForm');
+const editRoomName = document.getElementById('editRoomName');
+const editRoomPassword = document.getElementById('editRoomPassword');
+const editRoundSeconds = document.getElementById('editRoundSeconds');
+const editMaxQuestions = document.getElementById('editMaxQuestions');
+const editMusicEnabled = document.getElementById('editMusicEnabled');
+const cancelEditSettingsBtn = document.getElementById('cancelEditSettings');
+const gameOverPanel = document.getElementById('gameOverPanel');
+const showLeaderboardBtn = document.getElementById('showLeaderboardBtn');
 const podiumPanel = document.getElementById('podiumPanel');
 const podiumEl = document.getElementById('podium');
 const historyPanel = document.getElementById('historyPanel');
 const historyNameEl = document.getElementById('historyName');
 const historyListEl = document.getElementById('historyList');
 const closeHistoryBtn = document.getElementById('closeHistory');
+const leaderboardPanel = document.getElementById('leaderboardPanel');
 const leaderboardList = document.getElementById('leaderboard');
+const confettiCanvas = document.getElementById('confettiCanvas');
 
 let code = null;
 let hostToken = null;
@@ -43,6 +57,12 @@ let musicEnabled = false;
 let source = null;
 let countdownTimer = null;
 let musicUserMuted = false;
+let roomStatus = 'lobby';
+let currentRoomName = '';
+let currentRoundSeconds = 180;
+let currentMaxQuestions = null;
+let pendingLeaderboard = [];
+let pendingPodium = [];
 
 // --- session (this tab, this active room) ---
 
@@ -122,25 +142,31 @@ function renderLibraryChooser() {
   createCard.classList.add('hidden');
 }
 
+async function verifyRoomPassword(roomCode, promptMessage) {
+  const pw = prompt(promptMessage);
+  if (pw === null) return false;
+  try {
+    const res = await fetch('/verify-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: roomCode, password: pw })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      alert(data.error || 'Incorrect password.');
+      return false;
+    }
+    return true;
+  } catch {
+    alert('Network error. Please try again.');
+    return false;
+  }
+}
+
 async function openFromLibrary(entry) {
   if (entry.passwordProtected) {
-    const pw = prompt(`Enter the password for "${entry.roomName || entry.code}":`);
-    if (pw === null) return;
-    try {
-      const res = await fetch('/verify-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: entry.code, password: pw })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        alert(data.error || 'Incorrect password.');
-        return;
-      }
-    } catch {
-      alert('Network error. Please try again.');
-      return;
-    }
+    const ok = await verifyRoomPassword(entry.code, `Enter the password for "${entry.roomName || entry.code}":`);
+    if (!ok) return;
   }
   hostToken = entry.hostToken;
   const resumed = await resumeRoom(entry.code, entry.hostToken);
@@ -187,38 +213,118 @@ function renderLeaderboard(leaderboard) {
 
 const PODIUM_ORDER = [1, 0, 2]; // display order: 2nd, 1st, 3rd
 
+function buildPodiumSpot(p, i) {
+  const spot = document.createElement('div');
+  spot.className = `podium-spot place-${i + 1}`;
+
+  const medal = document.createElement('div');
+  medal.className = 'podium-medal';
+  medal.textContent = i + 1;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'podium-avatar';
+  avatar.textContent = p.icon || '🙂';
+
+  const name = document.createElement('div');
+  name.className = 'podium-name';
+  name.textContent = p.name;
+
+  const score = document.createElement('div');
+  score.className = 'podium-score';
+  score.textContent = `${p.score} pt${p.score === 1 ? '' : 's'}`;
+
+  spot.appendChild(medal);
+  spot.appendChild(avatar);
+  spot.appendChild(name);
+  spot.appendChild(score);
+  spot.onclick = () => showHistory(p.name);
+  return spot;
+}
+
 function renderPodium(podium) {
   podiumEl.innerHTML = '';
   PODIUM_ORDER.forEach(i => {
     const p = podium[i];
     if (!p) return;
-    const spot = document.createElement('div');
-    spot.className = `podium-spot place-${i + 1}`;
-
-    const medal = document.createElement('div');
-    medal.className = 'podium-medal';
-    medal.textContent = i + 1;
-
-    const avatar = document.createElement('div');
-    avatar.className = 'podium-avatar';
-    avatar.textContent = p.icon || '🙂';
-
-    const name = document.createElement('div');
-    name.className = 'podium-name';
-    name.textContent = p.name;
-
-    const score = document.createElement('div');
-    score.className = 'podium-score';
-    score.textContent = `${p.score} pt${p.score === 1 ? '' : 's'}`;
-
-    spot.appendChild(medal);
-    spot.appendChild(avatar);
-    spot.appendChild(name);
-    spot.appendChild(score);
-    spot.onclick = () => showHistory(p.name);
-    podiumEl.appendChild(spot);
+    podiumEl.appendChild(buildPodiumSpot(p, i));
   });
   podiumPanel.classList.remove('hidden');
+}
+
+function renderPodiumAnimated(podium) {
+  podiumEl.innerHTML = '';
+  podiumPanel.classList.remove('hidden');
+  const spots = {};
+  PODIUM_ORDER.forEach(i => {
+    const p = podium[i];
+    if (!p) return;
+    const spot = buildPodiumSpot(p, i);
+    spot.style.visibility = 'hidden';
+    podiumEl.appendChild(spot);
+    spots[i] = spot;
+  });
+  const revealSequence = [2, 1, 0].filter(i => spots[i] !== undefined);
+  revealSequence.forEach((i, idx) => {
+    setTimeout(() => {
+      spots[i].style.visibility = 'visible';
+      spots[i].classList.add('reveal-in');
+    }, idx * 550);
+  });
+  return revealSequence.length * 550;
+}
+
+// --- confetti (self-contained canvas particle burst) ---
+
+function fireConfetti() {
+  const ctx = confettiCanvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  confettiCanvas.width = w * dpr;
+  confettiCanvas.height = h * dpr;
+  confettiCanvas.style.width = `${w}px`;
+  confettiCanvas.style.height = `${h}px`;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const colors = ['#5b3df5', '#2563eb', '#ef4444', '#f5b301', '#16a34a'];
+  const pieces = [];
+  for (let i = 0; i < 140; i++) {
+    pieces.push({
+      x: Math.random() * w,
+      y: -20 - Math.random() * h * 0.5,
+      size: 6 + Math.random() * 6,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      rotation: Math.random() * 360,
+      rotSpeed: (Math.random() - 0.5) * 12,
+      vy: 2.5 + Math.random() * 3,
+      vx: (Math.random() - 0.5) * 2.5
+    });
+  }
+
+  const start = performance.now();
+  const duration = 3200;
+
+  function frame(now) {
+    const elapsed = now - start;
+    ctx.clearRect(0, 0, w, h);
+    pieces.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rotation += p.rotSpeed;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate((p.rotation * Math.PI) / 180);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size * 0.7, p.size, p.size * 1.4);
+      ctx.restore();
+    });
+    if (elapsed < duration) {
+      requestAnimationFrame(frame);
+    } else {
+      ctx.clearRect(0, 0, w, h);
+    }
+  }
+  requestAnimationFrame(frame);
 }
 
 function historyRow(label, value) {
@@ -279,9 +385,28 @@ async function showHistory(name) {
 
 closeHistoryBtn.onclick = () => historyPanel.classList.add('hidden');
 
-function openRoomPanel({ code: c, joinUrl, qrCode, passwordProtected, icon, roomName, musicEnabled: me }) {
+function setRoomStatus(status) {
+  roomStatus = status;
+  editSettingsBtn.classList.toggle('hidden', status !== 'lobby');
+  if (status !== 'lobby') editSettingsPanel.classList.add('hidden');
+}
+
+function openRoomPanel({
+  code: c,
+  joinUrl,
+  qrCode,
+  passwordProtected,
+  icon,
+  roomName,
+  musicEnabled: me,
+  roundSeconds,
+  maxQuestions
+}) {
   code = c;
   musicEnabled = Boolean(me);
+  currentRoomName = roomName || '';
+  currentRoundSeconds = roundSeconds || 180;
+  currentMaxQuestions = maxQuestions || null;
   codeSpan.textContent = code;
   if (joinUrl) joinUrlInput.value = joinUrl;
   if (qrCode) qrImg.src = qrCode;
@@ -296,6 +421,7 @@ function openRoomPanel({ code: c, joinUrl, qrCode, passwordProtected, icon, room
   createCard.classList.add('hidden');
   libraryChooser.classList.add('hidden');
   roomDiv.classList.remove('hidden');
+  setRoomStatus('lobby');
 }
 
 function formatRemaining(ms) {
@@ -325,14 +451,17 @@ function stopCountdown() {
 }
 
 function enterActiveState(endsAt) {
+  setRoomStatus('active');
   startBtn.classList.add('hidden');
   endBtn.classList.remove('hidden');
+  gameOverPanel.classList.add('hidden');
   podiumPanel.classList.add('hidden');
+  leaderboardPanel.classList.add('hidden');
   historyPanel.classList.add('hidden');
   retentionNoticeEl.classList.add('hidden');
   progressStatusEl.textContent = '';
   // QR/link and the full name list stop being useful once play starts —
-  // collapse them so the timer and progress don't need scrolling to see.
+  // collapse them so the timer and controls don't need scrolling to see.
   joinPanelExtra.classList.add('hidden');
   playersList.classList.add('hidden');
   startCountdown(endsAt);
@@ -342,7 +471,8 @@ function enterActiveState(endsAt) {
   }
 }
 
-function enterCompleteState(leaderboard, podium) {
+function enterCompleteState(leaderboard, podium, { immediate = false } = {}) {
+  setRoomStatus('complete');
   stopCountdown();
   timerWrap.classList.add('hidden');
   startBtn.classList.add('hidden');
@@ -350,12 +480,40 @@ function enterCompleteState(leaderboard, podium) {
   joinPanelExtra.classList.add('hidden');
   playersList.classList.add('hidden');
   if (window.GtkyMusic) window.GtkyMusic.stop();
-  renderPodium(podium && podium.length ? podium : leaderboard.slice(0, 3));
-  renderLeaderboard(leaderboard);
+
+  pendingLeaderboard = leaderboard;
+  pendingPodium = podium && podium.length ? podium : leaderboard.slice(0, 3);
+
+  if (immediate) {
+    gameOverPanel.classList.add('hidden');
+    renderPodium(pendingPodium);
+    renderLeaderboard(pendingLeaderboard);
+    leaderboardPanel.classList.remove('hidden');
+    showRetentionNotice();
+  } else {
+    podiumPanel.classList.add('hidden');
+    leaderboardPanel.classList.add('hidden');
+    retentionNoticeEl.classList.add('hidden');
+    gameOverPanel.classList.remove('hidden');
+  }
+}
+
+function showRetentionNotice() {
   retentionNoticeEl.textContent =
     "Players' fun facts have already been erased now that the game has ended. Names and scores will be deleted automatically within 2 weeks — use \"Delete Game Data\" above to remove them now.";
   retentionNoticeEl.classList.remove('hidden');
 }
+
+showLeaderboardBtn.onclick = () => {
+  gameOverPanel.classList.add('hidden');
+  fireConfetti();
+  const revealMs = renderPodiumAnimated(pendingPodium);
+  setTimeout(() => {
+    renderLeaderboard(pendingLeaderboard);
+    leaderboardPanel.classList.remove('hidden');
+    showRetentionNotice();
+  }, revealMs + 200);
+};
 
 function connectEvents() {
   if (source) source.close();
@@ -398,6 +556,7 @@ createForm.onsubmit = async e => {
         password: roomPasswordInput.value,
         name: roomNameInput.value,
         roundSeconds: roundSecondsInput.value || undefined,
+        maxQuestions: maxQuestionsInput.value || undefined,
         musicEnabled: musicEnabledInput.checked
       })
     });
@@ -473,7 +632,52 @@ muteMusicBtn.onclick = () => {
   }
 };
 
+editSettingsBtn.onclick = () => {
+  editRoomName.value = currentRoomName;
+  editRoomPassword.value = '';
+  editRoundSeconds.value = String(currentRoundSeconds);
+  editMaxQuestions.value = currentMaxQuestions ? String(currentMaxQuestions) : '';
+  editMusicEnabled.checked = musicEnabled;
+  editSettingsPanel.classList.remove('hidden');
+  editSettingsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+};
+
+cancelEditSettingsBtn.onclick = () => editSettingsPanel.classList.add('hidden');
+
+editSettingsForm.onsubmit = async e => {
+  e.preventDefault();
+  const body = {
+    code,
+    hostToken,
+    name: editRoomName.value,
+    roundSeconds: editRoundSeconds.value,
+    maxQuestions: editMaxQuestions.value || '',
+    musicEnabled: editMusicEnabled.checked
+  };
+  // Only touch the password if the host actually typed a new one — an
+  // untouched blank field must never silently wipe an existing password.
+  if (editRoomPassword.value) body.password = editRoomPassword.value;
+
+  const res = await fetch('/update-room', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (data.error) {
+    alert(data.error);
+    return;
+  }
+  openRoomPanel(data);
+  editSettingsPanel.classList.add('hidden');
+};
+
 deleteRoomBtn.onclick = async () => {
+  const ok = await verifyRoomPassword(
+    code,
+    "Enter this game's password to confirm deletion (leave blank if none was set):"
+  );
+  if (!ok) return;
   if (
     !confirm(
       "Permanently delete this game's data (players, facts, scores) now? This can't be undone."
@@ -511,7 +715,7 @@ async function resumeRoom(roomCode, token) {
     if (state.status === 'active') {
       enterActiveState(state.endsAt);
     } else if (state.status === 'complete') {
-      enterCompleteState(state.leaderboard, state.leaderboard.slice(0, 3));
+      enterCompleteState(state.leaderboard, state.leaderboard.slice(0, 3), { immediate: true });
     }
     connectEvents();
     return true;

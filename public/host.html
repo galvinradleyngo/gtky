@@ -22,7 +22,7 @@
     <div id="createCard" class="card hidden">
       <form id="createForm">
         <input type="text" id="roomName" placeholder="Room Name (optional)" maxlength="60" />
-        <input type="password" id="roomPassword" placeholder="Room Password (optional)" maxlength="60" />
+        <input type="password" id="roomPassword" placeholder="Password (optional, for you to edit/reopen later)" maxlength="60" />
         <label class="hint" for="roundSeconds" style="text-align: left; margin-bottom: -4px;">Round timer</label>
         <select id="roundSeconds">
           <option value="60">1 minute</option>
@@ -30,6 +30,13 @@
           <option value="180" selected>3 minutes</option>
           <option value="300">5 minutes</option>
           <option value="600">10 minutes</option>
+        </select>
+        <label class="hint" for="maxQuestions" style="text-align: left; margin-bottom: -4px;">Number of facts per player</label>
+        <select id="maxQuestions">
+          <option value="">All other players (default)</option>
+          <option value="3">3 facts</option>
+          <option value="5">5 facts</option>
+          <option value="10">10 facts</option>
         </select>
         <label class="hint" style="text-align: left; display: flex; align-items: center; gap: 8px; margin: 4px 0 -4px;">
           <input type="checkbox" id="musicEnabled" style="width: auto;" />
@@ -55,7 +62,7 @@
             <button id="copyLink" type="button">Copy Link</button>
           </div>
           <p class="hint">Players scan the QR code or open the link to join instantly.</p>
-          <p id="passwordBadge" class="hint hidden">🔒 This room requires the password you set to join.</p>
+          <p id="passwordBadge" class="hint hidden">🔒 Password set &mdash; you'll need it to edit or reopen this game later.</p>
         </div>
       </div>
 
@@ -67,6 +74,7 @@
       <section class="card">
         <div class="controls">
           <button id="start" class="primary">Start Game</button>
+          <button id="editSettingsBtn" type="button" class="secondary">Edit Settings</button>
           <button id="end" class="danger hidden">End Now</button>
           <button id="deleteRoom" class="danger">Delete Game Data</button>
         </div>
@@ -76,6 +84,43 @@
           <button id="muteMusic" type="button" class="secondary hidden">🔇 Mute Music</button>
         </div>
         <p id="retentionNotice" class="hint hidden"></p>
+      </section>
+
+      <section id="editSettingsPanel" class="card hidden">
+        <h2>Edit Settings</h2>
+        <form id="editSettingsForm">
+          <input type="text" id="editRoomName" placeholder="Room Name (optional)" maxlength="60" />
+          <input type="password" id="editRoomPassword" placeholder="Password (optional)" maxlength="60" />
+          <label class="hint" for="editRoundSeconds" style="text-align: left; margin-bottom: -4px;">Round timer</label>
+          <select id="editRoundSeconds">
+            <option value="60">1 minute</option>
+            <option value="120">2 minutes</option>
+            <option value="180">3 minutes</option>
+            <option value="300">5 minutes</option>
+            <option value="600">10 minutes</option>
+          </select>
+          <label class="hint" for="editMaxQuestions" style="text-align: left; margin-bottom: -4px;">Number of facts per player</label>
+          <select id="editMaxQuestions">
+            <option value="">All other players (default)</option>
+            <option value="3">3 facts</option>
+            <option value="5">5 facts</option>
+            <option value="10">10 facts</option>
+          </select>
+          <label class="hint" style="text-align: left; display: flex; align-items: center; gap: 8px; margin: 4px 0 -4px;">
+            <input type="checkbox" id="editMusicEnabled" style="width: auto;" />
+            🎵 Play background music during the round
+          </label>
+          <div class="controls">
+            <button type="submit" class="primary">Save Changes</button>
+            <button id="cancelEditSettings" type="button" class="secondary">Cancel</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="gameOverPanel" class="card hidden">
+        <h2>Game Over!</h2>
+        <p class="hint">Ready to reveal the results?</p>
+        <button id="showLeaderboardBtn" type="button" class="primary">🎉 Show Leaderboard</button>
       </section>
 
       <section id="podiumPanel" class="card hidden">
@@ -90,12 +135,13 @@
         <button id="closeHistory" type="button" class="secondary">Close</button>
       </section>
 
-      <section class="card">
+      <section id="leaderboardPanel" class="card hidden">
         <h2>Leaderboard</h2>
         <ul id="leaderboard"></ul>
       </section>
     </div>
   </div>
+  <canvas id="confettiCanvas"></canvas>
   <script src="/music.js"></script>
   <script src="/host.js"></script>
 </body>
