@@ -18,3 +18,27 @@ Then open `http://localhost:3000` in a browser.
 - The correct answer is only revealed once everyone has guessed, or the host forces a reveal
 - Leaderboard updates in real time
 - Host actions (start/reveal/end) are protected by a per-room host token
+
+## Deploying (Render, free tier)
+
+This app keeps game state in memory and pushes live updates over
+Server-Sent Events, so it needs to run as a single always-on process rather
+than a static site or a multi-instance serverless function.
+[Render](https://render.com)'s free web service tier fits that well with no
+code changes:
+
+1. Push this repo to GitHub (already done if you're reading this there).
+2. In the Render dashboard, click **New > Blueprint**, connect your GitHub
+   account, and select this repo. Render will detect `render.yaml` and
+   configure the service automatically (build: `npm install`, start:
+   `npm start`).
+3. Click **Apply** / **Create Web Service**. The first deploy takes a
+   couple of minutes.
+4. Once it's live, Render gives you a public URL like
+   `https://gtky.onrender.com` — that's what you share with players (or
+   feed into the host page's QR code, which builds itself from whatever
+   host the page is served from).
+
+Free-tier services spin down after ~15 minutes of no traffic and take
+~30-50 seconds to wake back up on the next request, so open the host page
+a minute before you actually start a session.
