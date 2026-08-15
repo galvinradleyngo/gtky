@@ -165,6 +165,70 @@ test('roundSeconds is validated to a whole number between 30 and 1800', async ()
   });
 });
 
+test('maxQuestions is validated and, when set, trims each player\'s personal queue', async () => {
+  await withServer(async base => {
+    const tooSmall = await postJSON(base, '/create-room', { maxQuestions: 0 });
+    assert.strictEqual(tooSmall.status, 400);
+    const notInt = await postJSON(base, '/create-room', { maxQuestions: 2.5 });
+    assert.strictEqual(notInt.status, 400);
+
+    const room = await createRoom(base, { maxQuestions: 1 });
+    assert.strictEqual(room.maxQuestions, 1);
+    const names = ['Ana', 'Bo', 'Cy', 'Di'];
+    for (const n of names) await joinRoom(base, room.code, n, `${n} fact`);
+
+    await postJSON(base, '/start', { code: room.code, hostToken: room.hostToken });
+    const state = await getJSON(base, `/room-state?code=${room.code}`);
+    assert.strictEqual(state.body.status, 'active');
+
+    // every player should have exactly 1 question despite 3 other players existing
+    const ans = await postJSON(base, '/answer', { code: room.code, name: 'Ana', guess: 'Bo' });
+    const body = await ans.json();
+    assert.strictEqual(body.finished, true); // only 1 question, so first answer finishes them
+  });
+});
+
+test('/update-room lets the host edit settings before the game starts, not after', async () => {
+  await withServer(async base => {
+    const room = await createRoom(base, { name: 'Old Name', roundSeconds: 60 });
+
+    const badToken = await postJSON(base, '/update-room', { code: room.code, hostToken: 'nope', name: 'x' });
+    assert.strictEqual(badToken.status, 403);
+
+    const updated = await postJSON(base, '/update-room', {
+      code: room.code,
+      hostToken: room.hostToken,
+      name: 'New Name',
+      roundSeconds: 300,
+      maxQuestions: 5,
+      musicEnabled: true,
+      password: 'newpass'
+    });
+    assert.strictEqual(updated.status, 200);
+    const updatedBody = await updated.json();
+    assert.strictEqual(updatedBody.roomName, 'New Name');
+    assert.strictEqual(updatedBody.roundSeconds, 300);
+    assert.strictEqual(updatedBody.maxQuestions, 5);
+    assert.strictEqual(updatedBody.musicEnabled, true);
+    assert.strictEqual(updatedBody.passwordProtected, true);
+
+    const state = await getJSON(base, `/room-state?code=${room.code}`);
+    assert.strictEqual(state.body.roomName, 'New Name');
+    assert.strictEqual(state.body.roundSeconds, 300);
+
+    // once active, editing is no longer allowed
+    await joinRoom(base, room.code, 'Ana', 'a');
+    await joinRoom(base, room.code, 'Bo', 'b');
+    await postJSON(base, '/start', { code: room.code, hostToken: room.hostToken });
+    const blocked = await postJSON(base, '/update-room', {
+      code: room.code,
+      hostToken: room.hostToken,
+      name: 'Too Late'
+    });
+    assert.strictEqual(blocked.status, 400);
+  });
+});
+
 test('short link redirects to player page with code prefilled', async () => {
   await withServer(async base => {
     const room = await createRoom(base);
@@ -216,17 +280,15 @@ test('join-room accepts a chosen player icon, or assigns a random valid one', as
   });
 });
 
-test('password-protected rooms reject joins with a missing or wrong password', async () => {
+test('room passwords are a host-only credential — players can join freely either way', async () => {
   await withServer(async base => {
     const room = await createRoom(base, { password: 'letmein' });
     assert.strictEqual(room.passwordProtected, true);
 
     const noPassword = await joinRoom(base, room.code, 'Ana', 'x');
-    assert.strictEqual(noPassword.status, 403);
-    const wrongPassword = await joinRoom(base, room.code, 'Ana', 'x', { password: 'nope' });
-    assert.strictEqual(wrongPassword.status, 403);
-    const rightPassword = await joinRoom(base, room.code, 'Ana', 'x', { password: 'letmein' });
-    assert.strictEqual(rightPassword.status, 200);
+    assert.strictEqual(noPassword.status, 200);
+    const wrongPasswordSupplied = await joinRoom(base, room.code, 'Bo', 'x', { password: 'nope' });
+    assert.strictEqual(wrongPasswordSupplied.status, 200);
   });
 });
 

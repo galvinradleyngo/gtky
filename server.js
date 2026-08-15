@@ -23,6 +23,7 @@ const MAX_BODY_BYTES = 10_000;
 const DEFAULT_ROUND_SECONDS = 180;
 const MIN_ROUND_SECONDS = 30;
 const MAX_ROUND_SECONDS = 1800;
+const MAX_QUESTIONS_LIMIT = 50;
 const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
 export const MAX_ROOM_AGE_MS = 14 * 24 * 60 * 60 * 1000; // hard cap: nothing outlives 2 weeks
 
@@ -199,6 +200,30 @@ function completedCount(room) {
   return count;
 }
 
+function validateRoundSeconds(value) {
+  if (value === undefined || value === null || value === '') return { ok: true, value: undefined };
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < MIN_ROUND_SECONDS || n > MAX_ROUND_SECONDS) {
+    return {
+      ok: false,
+      error: `round timer must be a whole number of seconds between ${MIN_ROUND_SECONDS} and ${MAX_ROUND_SECONDS}`
+    };
+  }
+  return { ok: true, value: n };
+}
+
+function validateMaxQuestions(value) {
+  if (value === undefined || value === null || value === '') return { ok: true, value: null };
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > MAX_QUESTIONS_LIMIT) {
+    return {
+      ok: false,
+      error: `number of facts must be a whole number between 1 and ${MAX_QUESTIONS_LIMIT}`
+    };
+  }
+  return { ok: true, value: n };
+}
+
 function joinUrlFor(req, code) {
   const proto = req.headers['x-forwarded-proto'] || 'http';
   return `${proto}://${req.headers.host}/j/${code}`;
@@ -220,16 +245,14 @@ function handleAPI(req, res) {
       const name = String(body.name || '').trim();
       if (name.length > 60) return send(res, 400, { error: 'room name is too long' });
 
-      let roundSeconds = DEFAULT_ROUND_SECONDS;
-      if (body.roundSeconds !== undefined && body.roundSeconds !== null && body.roundSeconds !== '') {
-        const n = Number(body.roundSeconds);
-        if (!Number.isInteger(n) || n < MIN_ROUND_SECONDS || n > MAX_ROUND_SECONDS) {
-          return send(res, 400, {
-            error: `round timer must be a whole number of seconds between ${MIN_ROUND_SECONDS} and ${MAX_ROUND_SECONDS}`
-          });
-        }
-        roundSeconds = n;
-      }
+      const roundSecondsCheck = validateRoundSeconds(body.roundSeconds);
+      if (!roundSecondsCheck.ok) return send(res, 400, { error: roundSecondsCheck.error });
+      const roundSeconds = roundSecondsCheck.value ?? DEFAULT_ROUND_SECONDS;
+
+      const maxQuestionsCheck = validateMaxQuestions(body.maxQuestions);
+      if (!maxQuestionsCheck.ok) return send(res, 400, { error: maxQuestionsCheck.error });
+      const maxQuestions = maxQuestionsCheck.value;
+
       const musicEnabled = Boolean(body.musicEnabled);
 
       const code = generateCode();
@@ -245,6 +268,7 @@ function handleAPI(req, res) {
         endsAt: null,
         timer: null,
         roundSeconds,
+        maxQuestions,
         musicEnabled,
         hostToken,
         password,
@@ -259,8 +283,60 @@ function handleAPI(req, res) {
         icon,
         roomName: name,
         roundSeconds,
+        maxQuestions,
         musicEnabled,
         passwordProtected: password.length > 0
+      });
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/update-room') {
+    parseBody(req, (err, body) => {
+      if (err) return send(res, 400, { error: 'invalid request body' });
+      const code = String(body.code || '').toUpperCase();
+      const room = rooms.get(code);
+      if (!room) return send(res, 404, { error: 'room not found' });
+      if (room.hostToken !== body.hostToken) {
+        return send(res, 403, { error: 'not authorized' });
+      }
+      if (room.status !== 'lobby') {
+        return send(res, 400, { error: 'can only edit a game before it starts' });
+      }
+
+      if (body.name !== undefined) {
+        const name = String(body.name || '').trim();
+        if (name.length > 60) return send(res, 400, { error: 'room name is too long' });
+        room.name = name;
+      }
+      if (body.password !== undefined) {
+        const password = String(body.password || '').trim();
+        if (password.length > 60) return send(res, 400, { error: 'password is too long' });
+        room.password = password;
+      }
+      if (body.roundSeconds !== undefined) {
+        const check = validateRoundSeconds(body.roundSeconds);
+        if (!check.ok) return send(res, 400, { error: check.error });
+        room.roundSeconds = check.value ?? DEFAULT_ROUND_SECONDS;
+      }
+      if (body.maxQuestions !== undefined) {
+        const check = validateMaxQuestions(body.maxQuestions);
+        if (!check.ok) return send(res, 400, { error: check.error });
+        room.maxQuestions = check.value;
+      }
+      if (body.musicEnabled !== undefined) {
+        room.musicEnabled = Boolean(body.musicEnabled);
+      }
+
+      room.lastActivity = Date.now();
+      sendWithQr(req, res, code, {
+        code,
+        roomName: room.name,
+        roundSeconds: room.roundSeconds,
+        maxQuestions: room.maxQuestions,
+        musicEnabled: room.musicEnabled,
+        passwordProtected: Boolean(room.password),
+        icon: room.icon
       });
     });
     return;
@@ -287,7 +363,6 @@ function handleAPI(req, res) {
       const code = String(body.code || '').trim().toUpperCase();
       const name = String(body.name || '').trim();
       const fact = String(body.fact || '').trim();
-      const password = String(body.password || '').trim();
       if (!code || !name || !fact) {
         return send(res, 400, { error: 'code, name, and fact are required' });
       }
@@ -299,9 +374,8 @@ function handleAPI(req, res) {
         : PLAYER_ICONS[Math.floor(Math.random() * PLAYER_ICONS.length)];
       const room = rooms.get(code);
       if (!room) return send(res, 404, { error: 'room not found' });
-      if (room.password && room.password !== password) {
-        return send(res, 403, { error: 'incorrect room password' });
-      }
+      // Room passwords authenticate the host reopening a saved game, not
+      // players joining — anyone with the code/link/QR can join freely.
       const taken = [...room.players.keys()].some(
         n => n.toLowerCase() === name.toLowerCase()
       );
@@ -316,6 +390,7 @@ function handleAPI(req, res) {
         icon: room.icon,
         roomName: room.name,
         roundSeconds: room.roundSeconds,
+        maxQuestions: room.maxQuestions,
         musicEnabled: room.musicEnabled
       });
     });
@@ -332,6 +407,7 @@ function handleAPI(req, res) {
       status: room.status,
       endsAt: room.endsAt,
       roundSeconds: room.roundSeconds,
+      maxQuestions: room.maxQuestions,
       musicEnabled: room.musicEnabled,
       icon: room.icon,
       roomName: room.name,
@@ -400,7 +476,9 @@ function handleAPI(req, res) {
       room.progress = new Map();
       room.answerLog = new Map();
       for (const n of names) {
-        room.queues.set(n, shuffle(names.filter(x => x !== n)));
+        const fullQueue = shuffle(names.filter(x => x !== n));
+        const queue = room.maxQuestions ? fullQueue.slice(0, room.maxQuestions) : fullQueue;
+        room.queues.set(n, queue);
         room.progress.set(n, 0);
         room.answerLog.set(n, []);
       }
@@ -568,6 +646,7 @@ function requestListener(req, res) {
   }
   if (
     pathname.startsWith('/create-room') ||
+    pathname.startsWith('/update-room') ||
     pathname.startsWith('/verify-password') ||
     pathname.startsWith('/join-room') ||
     pathname.startsWith('/room-state') ||

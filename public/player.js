@@ -96,7 +96,6 @@ form.onsubmit = async e => {
   code = form.code.value.trim().toUpperCase();
   name = form.name.value.trim();
   const fact = form.fact.value.trim();
-  const password = form.password.value;
   if (!code || !name || !fact) return;
 
   let data;
@@ -104,7 +103,7 @@ form.onsubmit = async e => {
     const res = await fetch('/join-room', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, name, fact, password, icon: selectedIcon })
+      body: JSON.stringify({ code, name, fact, icon: selectedIcon })
     });
     data = await res.json();
     if (!res.ok || data.error) {
