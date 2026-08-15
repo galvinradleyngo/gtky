@@ -188,6 +188,45 @@ test('maxQuestions is validated and, when set, trims each player\'s personal que
   });
 });
 
+test('factsToPlay is validated and, when set, caps the shared pool of players featured in the game', async () => {
+  await withServer(async base => {
+    const tooSmall = await postJSON(base, '/create-room', { factsToPlay: 1 });
+    assert.strictEqual(tooSmall.status, 400);
+    const notInt = await postJSON(base, '/create-room', { factsToPlay: 2.5 });
+    assert.strictEqual(notInt.status, 400);
+
+    const room = await createRoom(base, { factsToPlay: 2 });
+    assert.strictEqual(room.factsToPlay, 2);
+    const names = ['Ana', 'Bo', 'Cy', 'Di', 'Ed'];
+    const factOf = Object.fromEntries(names.map(n => [`${n} fact`, n]));
+    for (const n of names) await joinRoom(base, room.code, n, `${n} fact`);
+
+    const streams = {};
+    for (const n of names) streams[n] = await openSSE(base, room.code, n);
+
+    await postJSON(base, '/start', { code: room.code, hostToken: room.hostToken });
+
+    // Walk every player's entire queue (via the question stream + /answer)
+    // to collect every subject ever asked about, across the whole game.
+    const subjectsAsked = new Set();
+    for (const n of names) {
+      let msg = await streams[n].next();
+      assert.strictEqual(msg.type, 'question');
+      while (msg && msg.type === 'question') {
+        subjectsAsked.add(factOf[msg.fact]);
+        const res = await postJSON(base, '/answer', { code: room.code, name: n, guess: names[0] });
+        const body = await res.json();
+        if (body.finished) break;
+        msg = { type: 'question', fact: body.next.fact };
+      }
+      streams[n].close();
+    }
+    // Only the 2 pool members' facts should ever surface as questions,
+    // regardless of how many players joined the room.
+    assert.ok(subjectsAsked.size <= 2, `expected at most 2 distinct subjects, got ${[...subjectsAsked]}`);
+  });
+});
+
 test('/update-room lets the host edit settings before the game starts, not after', async () => {
   await withServer(async base => {
     const room = await createRoom(base, { name: 'Old Name', roundSeconds: 60 });
@@ -308,6 +347,22 @@ test('/verify-password confirms or rejects without needing the host token', asyn
     const openRoom = await createRoom(base);
     const ok = await postJSON(base, '/verify-password', { code: openRoom.code, password: '' });
     assert.strictEqual(ok.status, 200);
+  });
+});
+
+test('/verify-password trims stray whitespace the same way create-room does when storing it', async () => {
+  await withServer(async base => {
+    const room = await createRoom(base, { password: '  sunshine  ' });
+    const untrimmedInput = await postJSON(base, '/verify-password', {
+      code: room.code,
+      password: '  sunshine  '
+    });
+    assert.strictEqual(untrimmedInput.status, 200);
+    const trimmedInput = await postJSON(base, '/verify-password', {
+      code: room.code,
+      password: 'sunshine'
+    });
+    assert.strictEqual(trimmedInput.status, 200);
   });
 });
 
