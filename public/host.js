@@ -148,9 +148,14 @@ function renderLibraryChooser() {
   createCard.classList.add('hidden');
 }
 
+// Returns 'ok', 'wrong-password', 'not-found' (room no longer exists in
+// server memory — there's no database, so a server restart wipes every
+// room, not just this one), 'cancelled', or 'error'. Callers need to tell
+// "not found" apart from "wrong password" so a stale library entry doesn't
+// just keep re-prompting for a password against a game that's already gone.
 async function verifyRoomPassword(roomCode, promptMessage) {
   const pw = prompt(promptMessage);
-  if (pw === null) return false;
+  if (pw === null) return 'cancelled';
   try {
     const res = await fetch('/verify-password', {
       method: 'POST',
@@ -158,21 +163,32 @@ async function verifyRoomPassword(roomCode, promptMessage) {
       body: JSON.stringify({ code: roomCode, password: pw })
     });
     const data = await res.json();
-    if (!res.ok || !data.ok) {
-      alert(data.error || 'Incorrect password.');
-      return false;
-    }
-    return true;
+    if (res.status === 404) return 'not-found';
+    if (!res.ok || !data.ok) return 'wrong-password';
+    return 'ok';
   } catch {
-    alert('Network error. Please try again.');
-    return false;
+    return 'error';
   }
 }
 
 async function openFromLibrary(entry) {
   if (entry.passwordProtected) {
-    const ok = await verifyRoomPassword(entry.code, `Enter the password for "${entry.roomName || entry.code}":`);
-    if (!ok) return;
+    const result = await verifyRoomPassword(entry.code, `Enter the password for "${entry.roomName || entry.code}":`);
+    if (result === 'cancelled') return;
+    if (result === 'not-found') {
+      removeFromLibrary(entry.code);
+      alert('This game no longer exists on the server (it was cleared, e.g. by a server restart) — removing it from your list.');
+      renderLibraryChooser();
+      return;
+    }
+    if (result === 'wrong-password') {
+      alert('Incorrect password.');
+      return;
+    }
+    if (result === 'error') {
+      alert('Network error. Please try again.');
+      return;
+    }
   }
   hostToken = entry.hostToken;
   const resumed = await resumeRoom(entry.code, entry.hostToken);
@@ -689,11 +705,26 @@ editSettingsForm.onsubmit = async e => {
 };
 
 deleteRoomBtn.onclick = async () => {
-  const ok = await verifyRoomPassword(
+  const result = await verifyRoomPassword(
     code,
     "Enter this game's password to confirm deletion (leave blank if none was set):"
   );
-  if (!ok) return;
+  if (result === 'cancelled') return;
+  if (result === 'not-found') {
+    clearSession();
+    removeFromLibrary(code);
+    alert('This game no longer exists on the server (it was already cleared) — nothing left to delete.');
+    location.reload();
+    return;
+  }
+  if (result === 'wrong-password') {
+    alert('Incorrect password.');
+    return;
+  }
+  if (result === 'error') {
+    alert('Network error. Please try again.');
+    return;
+  }
   if (
     !confirm(
       "Permanently delete this game's data (players, facts, scores) now? This can't be undone."
