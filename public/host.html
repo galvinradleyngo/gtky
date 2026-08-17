@@ -31,20 +31,27 @@
           <option value="300">5 minutes</option>
           <option value="600">10 minutes</option>
         </select>
-        <label class="hint" for="maxQuestions" style="text-align: left; margin-bottom: -4px;">Number of facts per player</label>
-        <select id="maxQuestions">
-          <option value="">All other players (default)</option>
+        <label class="hint" for="factsPerPlayer" style="text-align: left; margin-bottom: -4px;">Facts each player enters about themselves</label>
+        <select id="factsPerPlayer">
+          <option value="1">1 fact (default)</option>
+          <option value="2">2 facts</option>
           <option value="3">3 facts</option>
           <option value="5">5 facts</option>
-          <option value="10">10 facts</option>
         </select>
-        <label class="hint" for="factsToPlay" style="text-align: left; margin-bottom: -4px;">Number of facts to play (shared pool)</label>
+        <label class="hint" for="factsToPlay" style="text-align: left; margin-bottom: -4px;">Number of players featured (shared pool)</label>
         <select id="factsToPlay">
           <option value="">All players (default)</option>
-          <option value="2">2 players' facts</option>
-          <option value="3">3 players' facts</option>
-          <option value="5">5 players' facts</option>
-          <option value="10">10 players' facts</option>
+          <option value="2">2 players</option>
+          <option value="3">3 players</option>
+          <option value="5">5 players</option>
+          <option value="10">10 players</option>
+        </select>
+        <label class="hint" for="questionsPerPlayer" style="text-align: left; margin-bottom: -4px;">Questions each player is quizzed on</label>
+        <select id="questionsPerPlayer">
+          <option value="">One per other player (default)</option>
+          <option value="3">3 questions</option>
+          <option value="5">5 questions</option>
+          <option value="10">10 questions</option>
         </select>
         <label class="hint" style="text-align: left; display: flex; align-items: center; gap: 8px; margin: 4px 0 -4px;">
           <input type="checkbox" id="musicEnabled" style="width: auto;" />
@@ -107,20 +114,27 @@
             <option value="300">5 minutes</option>
             <option value="600">10 minutes</option>
           </select>
-          <label class="hint" for="editMaxQuestions" style="text-align: left; margin-bottom: -4px;">Number of facts per player</label>
-          <select id="editMaxQuestions">
-            <option value="">All other players (default)</option>
+          <label class="hint" for="editFactsPerPlayer" style="text-align: left; margin-bottom: -4px;">Facts each player enters about themselves</label>
+          <select id="editFactsPerPlayer">
+            <option value="1">1 fact (default)</option>
+            <option value="2">2 facts</option>
             <option value="3">3 facts</option>
             <option value="5">5 facts</option>
-            <option value="10">10 facts</option>
           </select>
-          <label class="hint" for="editFactsToPlay" style="text-align: left; margin-bottom: -4px;">Number of facts to play (shared pool)</label>
+          <label class="hint" for="editFactsToPlay" style="text-align: left; margin-bottom: -4px;">Number of players featured (shared pool)</label>
           <select id="editFactsToPlay">
             <option value="">All players (default)</option>
-            <option value="2">2 players' facts</option>
-            <option value="3">3 players' facts</option>
-            <option value="5">5 players' facts</option>
-            <option value="10">10 players' facts</option>
+            <option value="2">2 players</option>
+            <option value="3">3 players</option>
+            <option value="5">5 players</option>
+            <option value="10">10 players</option>
+          </select>
+          <label class="hint" for="editQuestionsPerPlayer" style="text-align: left; margin-bottom: -4px;">Questions each player is quizzed on</label>
+          <select id="editQuestionsPerPlayer">
+            <option value="">One per other player (default)</option>
+            <option value="3">3 questions</option>
+            <option value="5">5 questions</option>
+            <option value="10">10 questions</option>
           </select>
           <label class="hint" style="text-align: left; display: flex; align-items: center; gap: 8px; margin: 4px 0 -4px;">
             <input type="checkbox" id="editMusicEnabled" style="width: auto;" />
