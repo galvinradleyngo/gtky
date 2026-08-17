@@ -23,7 +23,9 @@ const MAX_BODY_BYTES = 10_000;
 const DEFAULT_ROUND_SECONDS = 180;
 const MIN_ROUND_SECONDS = 30;
 const MAX_ROUND_SECONDS = 1800;
-const MAX_QUESTIONS_LIMIT = 50;
+const DEFAULT_FACTS_PER_PLAYER = 1;
+const MAX_FACTS_PER_PLAYER = 10;
+const MAX_FACTS_TO_PLAY_LIMIT = 50;
 const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
 export const MAX_ROOM_AGE_MS = 14 * 24 * 60 * 60 * 1000; // hard cap: nothing outlives 2 weeks
 
@@ -173,7 +175,7 @@ function erasePersonalData(room) {
   // delete. Names and scores stay (needed for the leaderboard/history), but
   // the fact text itself is gone from server memory for good.
   for (const player of room.players.values()) {
-    player.fact = null;
+    player.facts = null;
   }
   for (const log of room.answerLog.values()) {
     for (const entry of log) {
@@ -212,13 +214,13 @@ function validateRoundSeconds(value) {
   return { ok: true, value: n };
 }
 
-function validateMaxQuestions(value) {
-  if (value === undefined || value === null || value === '') return { ok: true, value: null };
+function validateFactsPerPlayer(value) {
+  if (value === undefined || value === null || value === '') return { ok: true, value: undefined };
   const n = Number(value);
-  if (!Number.isInteger(n) || n < 1 || n > MAX_QUESTIONS_LIMIT) {
+  if (!Number.isInteger(n) || n < 1 || n > MAX_FACTS_PER_PLAYER) {
     return {
       ok: false,
-      error: `facts per player must be a whole number between 1 and ${MAX_QUESTIONS_LIMIT}`
+      error: `facts per player must be a whole number between 1 and ${MAX_FACTS_PER_PLAYER}`
     };
   }
   return { ok: true, value: n };
@@ -227,10 +229,22 @@ function validateMaxQuestions(value) {
 function validateFactsToPlay(value) {
   if (value === undefined || value === null || value === '') return { ok: true, value: null };
   const n = Number(value);
-  if (!Number.isInteger(n) || n < 2 || n > MAX_QUESTIONS_LIMIT) {
+  if (!Number.isInteger(n) || n < 2 || n > MAX_FACTS_TO_PLAY_LIMIT) {
     return {
       ok: false,
-      error: `facts to play must be a whole number of at least 2 (up to ${MAX_QUESTIONS_LIMIT})`
+      error: `facts to play must be a whole number of at least 2 (up to ${MAX_FACTS_TO_PLAY_LIMIT})`
+    };
+  }
+  return { ok: true, value: n };
+}
+
+function validateQuestionsPerPlayer(value) {
+  if (value === undefined || value === null || value === '') return { ok: true, value: null };
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > MAX_FACTS_TO_PLAY_LIMIT) {
+    return {
+      ok: false,
+      error: `questions per player must be a whole number between 1 and ${MAX_FACTS_TO_PLAY_LIMIT}`
     };
   }
   return { ok: true, value: n };
@@ -261,13 +275,17 @@ function handleAPI(req, res) {
       if (!roundSecondsCheck.ok) return send(res, 400, { error: roundSecondsCheck.error });
       const roundSeconds = roundSecondsCheck.value ?? DEFAULT_ROUND_SECONDS;
 
-      const maxQuestionsCheck = validateMaxQuestions(body.maxQuestions);
-      if (!maxQuestionsCheck.ok) return send(res, 400, { error: maxQuestionsCheck.error });
-      const maxQuestions = maxQuestionsCheck.value;
+      const factsPerPlayerCheck = validateFactsPerPlayer(body.factsPerPlayer);
+      if (!factsPerPlayerCheck.ok) return send(res, 400, { error: factsPerPlayerCheck.error });
+      const factsPerPlayer = factsPerPlayerCheck.value ?? DEFAULT_FACTS_PER_PLAYER;
 
       const factsToPlayCheck = validateFactsToPlay(body.factsToPlay);
       if (!factsToPlayCheck.ok) return send(res, 400, { error: factsToPlayCheck.error });
       const factsToPlay = factsToPlayCheck.value;
+
+      const questionsPerPlayerCheck = validateQuestionsPerPlayer(body.questionsPerPlayer);
+      if (!questionsPerPlayerCheck.ok) return send(res, 400, { error: questionsPerPlayerCheck.error });
+      const questionsPerPlayer = questionsPerPlayerCheck.value;
 
       const musicEnabled = Boolean(body.musicEnabled);
 
@@ -284,8 +302,9 @@ function handleAPI(req, res) {
         endsAt: null,
         timer: null,
         roundSeconds,
-        maxQuestions,
+        factsPerPlayer,
         factsToPlay,
+        questionsPerPlayer,
         musicEnabled,
         hostToken,
         password,
@@ -300,8 +319,9 @@ function handleAPI(req, res) {
         icon,
         roomName: name,
         roundSeconds,
-        maxQuestions,
+        factsPerPlayer,
         factsToPlay,
+        questionsPerPlayer,
         musicEnabled,
         passwordProtected: password.length > 0
       });
@@ -337,15 +357,20 @@ function handleAPI(req, res) {
         if (!check.ok) return send(res, 400, { error: check.error });
         room.roundSeconds = check.value ?? DEFAULT_ROUND_SECONDS;
       }
-      if (body.maxQuestions !== undefined) {
-        const check = validateMaxQuestions(body.maxQuestions);
+      if (body.factsPerPlayer !== undefined) {
+        const check = validateFactsPerPlayer(body.factsPerPlayer);
         if (!check.ok) return send(res, 400, { error: check.error });
-        room.maxQuestions = check.value;
+        room.factsPerPlayer = check.value ?? DEFAULT_FACTS_PER_PLAYER;
       }
       if (body.factsToPlay !== undefined) {
         const check = validateFactsToPlay(body.factsToPlay);
         if (!check.ok) return send(res, 400, { error: check.error });
         room.factsToPlay = check.value;
+      }
+      if (body.questionsPerPlayer !== undefined) {
+        const check = validateQuestionsPerPlayer(body.questionsPerPlayer);
+        if (!check.ok) return send(res, 400, { error: check.error });
+        room.questionsPerPlayer = check.value;
       }
       if (body.musicEnabled !== undefined) {
         room.musicEnabled = Boolean(body.musicEnabled);
@@ -356,8 +381,9 @@ function handleAPI(req, res) {
         code,
         roomName: room.name,
         roundSeconds: room.roundSeconds,
-        maxQuestions: room.maxQuestions,
+        factsPerPlayer: room.factsPerPlayer,
         factsToPlay: room.factsToPlay,
+        questionsPerPlayer: room.questionsPerPlayer,
         musicEnabled: room.musicEnabled,
         passwordProtected: Boolean(room.password),
         icon: room.icon
@@ -386,25 +412,38 @@ function handleAPI(req, res) {
       if (err) return send(res, 400, { error: 'invalid request body' });
       const code = String(body.code || '').trim().toUpperCase();
       const name = String(body.name || '').trim();
-      const fact = String(body.fact || '').trim();
-      if (!code || !name || !fact) {
-        return send(res, 400, { error: 'code, name, and fact are required' });
+      if (!code || !name) {
+        return send(res, 400, { error: 'code and name are required' });
       }
       if (name.length > 40) return send(res, 400, { error: 'name is too long' });
-      if (fact.length > 280) return send(res, 400, { error: 'fun fact is too long' });
+      const room = rooms.get(code);
+      if (!room) return send(res, 404, { error: 'room not found' });
+
+      const rawFacts = Array.isArray(body.facts) ? body.facts : [];
+      const facts = rawFacts.map(f => String(f || '').trim());
+      if (facts.length !== room.factsPerPlayer) {
+        return send(res, 400, {
+          error: `you must submit exactly ${room.factsPerPlayer} fact${room.factsPerPlayer === 1 ? '' : 's'} about yourself`
+        });
+      }
+      if (facts.some(f => !f)) {
+        return send(res, 400, { error: 'every fact must be filled in' });
+      }
+      if (facts.some(f => f.length > 280)) {
+        return send(res, 400, { error: 'each fact must be 280 characters or fewer' });
+      }
+
       const requestedIcon = String(body.icon || '');
       const playerIcon = PLAYER_ICONS.includes(requestedIcon)
         ? requestedIcon
         : PLAYER_ICONS[Math.floor(Math.random() * PLAYER_ICONS.length)];
-      const room = rooms.get(code);
-      if (!room) return send(res, 404, { error: 'room not found' });
       // Room passwords authenticate the host reopening a saved game, not
       // players joining — anyone with the code/link/QR can join freely.
       const taken = [...room.players.keys()].some(
         n => n.toLowerCase() === name.toLowerCase()
       );
       if (taken) return send(res, 400, { error: 'that name is already taken in this room' });
-      room.players.set(name, { fact, score: 0, icon: playerIcon });
+      room.players.set(name, { facts, score: 0, icon: playerIcon });
       room.lastActivity = Date.now();
       broadcastAll(code, { type: 'roster', players: rosterList(room) });
       send(res, 200, {
@@ -414,7 +453,7 @@ function handleAPI(req, res) {
         icon: room.icon,
         roomName: room.name,
         roundSeconds: room.roundSeconds,
-        maxQuestions: room.maxQuestions,
+        factsPerPlayer: room.factsPerPlayer,
         factsToPlay: room.factsToPlay,
         musicEnabled: room.musicEnabled
       });
@@ -432,8 +471,9 @@ function handleAPI(req, res) {
       status: room.status,
       endsAt: room.endsAt,
       roundSeconds: room.roundSeconds,
-      maxQuestions: room.maxQuestions,
+      factsPerPlayer: room.factsPerPlayer,
       factsToPlay: room.factsToPlay,
+      questionsPerPlayer: room.questionsPerPlayer,
       musicEnabled: room.musicEnabled,
       icon: room.icon,
       roomName: room.name,
@@ -498,18 +538,41 @@ function handleAPI(req, res) {
         return send(res, 400, { error: 'need at least 2 players to start' });
       }
 
-      // "Facts to play" is a shared pool: only these players' facts are ever
-      // asked about this game. "Facts per player" separately trims how many
-      // of those (up to what's available) each individual player is asked.
+      // Three independent settings shape the round:
+      // - "Facts to play" is a shared pool: only these players are ever
+      //   asked about at all.
+      // - "Facts per player" is how many facts each player submitted when
+      //   joining (their personal blank count).
+      // - "Questions per player" is how many questions each guesser
+      //   answers. By default that's exactly one per other featured
+      //   player (one of their facts, picked at random) regardless of how
+      //   many facts they submitted; the host can raise it to draw more
+      //   questions from the full shared pool of individual facts.
       const poolSize = room.factsToPlay ? Math.min(room.factsToPlay, names.length) : names.length;
       const pool = poolSize < names.length ? shuffle(names).slice(0, poolSize) : names;
+      const subjectPool = [];
+      for (const n of pool) {
+        room.players.get(n).facts.forEach((_, factIndex) => subjectPool.push({ name: n, factIndex }));
+      }
 
       room.queues = new Map();
       room.progress = new Map();
       room.answerLog = new Map();
       for (const n of names) {
-        const fullQueue = shuffle(pool.filter(x => x !== n));
-        const queue = room.maxQuestions ? fullQueue.slice(0, room.maxQuestions) : fullQueue;
+        let queue;
+        if (room.questionsPerPlayer) {
+          const fullPool = subjectPool.filter(s => s.name !== n);
+          queue = shuffle(fullPool).slice(0, Math.min(room.questionsPerPlayer, fullPool.length));
+        } else {
+          queue = shuffle(
+            pool
+              .filter(other => other !== n)
+              .map(other => {
+                const facts = room.players.get(other).facts;
+                return { name: other, factIndex: Math.floor(Math.random() * facts.length) };
+              })
+          );
+        }
         room.queues.set(n, queue);
         room.progress.set(n, 0);
         room.answerLog.set(n, []);
@@ -520,16 +583,17 @@ function handleAPI(req, res) {
 
       broadcastEach(code, client => {
         const queue = room.queues.get(client.name);
-        if (!queue) {
+        if (!queue || queue.length === 0) {
           return {
             type: 'round-started',
             endsAt: room.endsAt,
             musicEnabled: room.musicEnabled
           };
         }
+        const first = queue[0];
         return {
           type: 'question',
-          fact: room.players.get(queue[0]).fact,
+          fact: room.players.get(first.name).facts[first.factIndex],
           options: rosterList(room),
           questionIndex: 1,
           totalQuestions: queue.length,
@@ -571,11 +635,11 @@ function handleAPI(req, res) {
       if (!room.players.has(guess)) return send(res, 400, { error: 'invalid option' });
 
       const subject = queue[idx];
-      const correct = guess === subject;
+      const correct = guess === subject.name;
       if (correct) room.players.get(name).score += 1;
       room.answerLog.get(name).push({
-        subject,
-        fact: room.players.get(subject).fact,
+        subject: subject.name,
+        fact: room.players.get(subject.name).facts[subject.factIndex],
         guess,
         correct
       });
@@ -596,15 +660,15 @@ function handleAPI(req, res) {
       }
 
       if (finishedNow) {
-        send(res, 200, { correct, answer: subject, finished: true });
+        send(res, 200, { correct, answer: subject.name, finished: true });
       } else {
         const nextSubject = queue[idx + 1];
         send(res, 200, {
           correct,
-          answer: subject,
+          answer: subject.name,
           finished: false,
           next: {
-            fact: room.players.get(nextSubject).fact,
+            fact: room.players.get(nextSubject.name).facts[nextSubject.factIndex],
             questionIndex: idx + 2,
             totalQuestions: queue.length
           }

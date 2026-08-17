@@ -88,7 +88,8 @@ async function createRoom(base, opts = {}) {
 }
 
 async function joinRoom(base, code, name, fact, extra = {}) {
-  const res = await postJSON(base, '/join-room', { code, name, fact, ...extra });
+  const { facts, ...rest } = extra;
+  const res = await postJSON(base, '/join-room', { code, name, facts: facts || [fact], ...rest });
   return { status: res.status, body: await res.json() };
 }
 
@@ -165,26 +166,74 @@ test('roundSeconds is validated to a whole number between 30 and 1800', async ()
   });
 });
 
-test('maxQuestions is validated and, when set, trims each player\'s personal queue', async () => {
+test('factsPerPlayer is validated, defaults to 1, and requires each joiner to submit exactly that many facts', async () => {
   await withServer(async base => {
-    const tooSmall = await postJSON(base, '/create-room', { maxQuestions: 0 });
+    const tooSmall = await postJSON(base, '/create-room', { factsPerPlayer: 0 });
     assert.strictEqual(tooSmall.status, 400);
-    const notInt = await postJSON(base, '/create-room', { maxQuestions: 2.5 });
+    const notInt = await postJSON(base, '/create-room', { factsPerPlayer: 2.5 });
     assert.strictEqual(notInt.status, 400);
 
-    const room = await createRoom(base, { maxQuestions: 1 });
-    assert.strictEqual(room.maxQuestions, 1);
-    const names = ['Ana', 'Bo', 'Cy', 'Di'];
-    for (const n of names) await joinRoom(base, room.code, n, `${n} fact`);
+    const defaultRoom = await createRoom(base);
+    assert.strictEqual(defaultRoom.factsPerPlayer, 1);
 
+    const room = await createRoom(base, { factsPerPlayer: 2 });
+    assert.strictEqual(room.factsPerPlayer, 2);
+
+    const tooFew = await postJSON(base, '/join-room', {
+      code: room.code,
+      name: 'Ana',
+      facts: ['only one fact']
+    });
+    assert.strictEqual(tooFew.status, 400);
+
+    const blankFact = await postJSON(base, '/join-room', {
+      code: room.code,
+      name: 'Ana',
+      facts: ['likes tea', '   ']
+    });
+    assert.strictEqual(blankFact.status, 400);
+
+    const names = ['Ana', 'Bo', 'Cy'];
+    for (const n of names) {
+      const res = await joinRoom(base, room.code, n, null, { facts: [`${n} fact A`, `${n} fact B`] });
+      assert.strictEqual(res.status, 200);
+    }
+
+    const stream = await openSSE(base, room.code, 'Ana');
     await postJSON(base, '/start', { code: room.code, hostToken: room.hostToken });
     const state = await getJSON(base, `/room-state?code=${room.code}`);
     assert.strictEqual(state.body.status, 'active');
 
-    // every player should have exactly 1 question despite 3 other players existing
-    const ans = await postJSON(base, '/answer', { code: room.code, name: 'Ana', guess: 'Bo' });
-    const body = await ans.json();
-    assert.strictEqual(body.finished, true); // only 1 question, so first answer finishes them
+    // by default, quiz length tracks the number of OTHER PLAYERS, not the
+    // total facts they submitted — each other player contributes exactly
+    // one question (one of their facts, picked at random), even though
+    // they each submitted 2.
+    const msg = await stream.next();
+    assert.strictEqual(msg.type, 'question');
+    assert.strictEqual(msg.totalQuestions, 2); // 2 other players, 1 question each
+    stream.close();
+  });
+});
+
+test('questionsPerPlayer overrides the default one-question-per-player quiz length', async () => {
+  await withServer(async base => {
+    const tooSmall = await postJSON(base, '/create-room', { questionsPerPlayer: 0 });
+    assert.strictEqual(tooSmall.status, 400);
+
+    const room = await createRoom(base, { factsPerPlayer: 2, questionsPerPlayer: 3 });
+    assert.strictEqual(room.questionsPerPlayer, 3);
+    const names = ['Ana', 'Bo', 'Cy'];
+    for (const n of names) {
+      await joinRoom(base, room.code, n, null, { facts: [`${n} fact A`, `${n} fact B`] });
+    }
+
+    const stream = await openSSE(base, room.code, 'Ana');
+    await postJSON(base, '/start', { code: room.code, hostToken: room.hostToken });
+    const msg = await stream.next();
+    assert.strictEqual(msg.type, 'question');
+    // capped at 3, drawn from the full 4-fact pool (2 other players x 2 facts)
+    assert.strictEqual(msg.totalQuestions, 3);
+    stream.close();
   });
 });
 
@@ -239,7 +288,7 @@ test('/update-room lets the host edit settings before the game starts, not after
       hostToken: room.hostToken,
       name: 'New Name',
       roundSeconds: 300,
-      maxQuestions: 5,
+      factsPerPlayer: 5,
       musicEnabled: true,
       password: 'newpass'
     });
@@ -247,7 +296,7 @@ test('/update-room lets the host edit settings before the game starts, not after
     const updatedBody = await updated.json();
     assert.strictEqual(updatedBody.roomName, 'New Name');
     assert.strictEqual(updatedBody.roundSeconds, 300);
-    assert.strictEqual(updatedBody.maxQuestions, 5);
+    assert.strictEqual(updatedBody.factsPerPlayer, 5);
     assert.strictEqual(updatedBody.musicEnabled, true);
     assert.strictEqual(updatedBody.passwordProtected, true);
 
@@ -256,8 +305,10 @@ test('/update-room lets the host edit settings before the game starts, not after
     assert.strictEqual(state.body.roundSeconds, 300);
 
     // once active, editing is no longer allowed
-    await joinRoom(base, room.code, 'Ana', 'a');
-    await joinRoom(base, room.code, 'Bo', 'b');
+    // (the update above set factsPerPlayer to 5, so joiners must submit 5 facts each)
+    const fiveFacts = ['1', '2', '3', '4', '5'];
+    await joinRoom(base, room.code, 'Ana', null, { facts: fiveFacts });
+    await joinRoom(base, room.code, 'Bo', null, { facts: fiveFacts });
     await postJSON(base, '/start', { code: room.code, hostToken: room.hostToken });
     const blocked = await postJSON(base, '/update-room', {
       code: room.code,
@@ -281,10 +332,10 @@ test('join-room validates fields, rejects duplicate names, and echoes room metad
   await withServer(async base => {
     const room = await createRoom(base, { name: 'Icebreaker', roundSeconds: 90 });
 
-    const missing = await postJSON(base, '/join-room', { code: room.code, name: '', fact: 'x' });
+    const missing = await postJSON(base, '/join-room', { code: room.code, name: '', facts: ['x'] });
     assert.strictEqual(missing.status, 400);
 
-    const noRoom = await postJSON(base, '/join-room', { code: 'ZZZZ', name: 'Bo', fact: 'x' });
+    const noRoom = await postJSON(base, '/join-room', { code: 'ZZZZ', name: 'Bo', facts: ['x'] });
     assert.strictEqual(noRoom.status, 404);
 
     const first = await joinRoom(base, room.code, 'Ana', 'likes tea');

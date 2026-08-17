@@ -13,16 +13,29 @@
     <h1>Join Game</h1>
 
     <div id="joinCard" class="card">
-      <form id="joinForm">
-        <input type="text" name="code" placeholder="Room Code" maxlength="4" required />
+      <form id="codeForm">
+        <input type="text" name="code" id="codeInput" placeholder="Room Code" maxlength="4" required />
+        <button type="submit" class="primary">Continue</button>
+      </form>
+
+      <form id="detailsForm" class="hidden">
+        <div id="roomPreview" class="join-panel hidden">
+          <div id="previewIcon" class="icon-badge small"></div>
+          <h2 id="previewName" class="hidden"></h2>
+        </div>
         <input type="text" name="name" placeholder="Your Name" maxlength="40" required />
-        <input type="text" name="fact" placeholder="Fun Fact About You" maxlength="280" required />
+        <label class="hint" style="text-align: left; margin-bottom: -4px;">Your fun facts about yourself</label>
+        <div id="factInputs"></div>
         <label class="hint" style="text-align: left; margin-bottom: -4px;">Pick your avatar</label>
         <div id="iconPicker" class="icon-picker"></div>
-        <button type="submit" class="primary">Join</button>
+        <div class="controls">
+          <button type="submit" class="primary">Join</button>
+          <button id="backToCode" type="button" class="secondary">Back</button>
+        </div>
       </form>
+
       <p id="joinError" class="error hidden" style="margin-top: 10px;"></p>
-      <p class="hint" style="margin-top: 10px;">Data note: your fun fact is personal, so it's erased from the server the moment this game ends &mdash; win, lose, or the host stops it early. Your name and score stick around only long enough to show the final leaderboard, and the whole room is deleted automatically no later than 2 weeks after it was created either way.</p>
+      <p class="hint" style="margin-top: 10px;">Data note: your fun facts are personal, so they're erased from the server the moment this game ends &mdash; win, lose, or the host stops it early. Your name and score stick around only long enough to show the final leaderboard, and the whole room is deleted automatically no later than 2 weeks after it was created either way.</p>
     </div>
 
     <div id="game" class="hidden">

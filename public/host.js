@@ -9,8 +9,9 @@ const createForm = document.getElementById('createForm');
 const roomNameInput = document.getElementById('roomName');
 const roomPasswordInput = document.getElementById('roomPassword');
 const roundSecondsInput = document.getElementById('roundSeconds');
-const maxQuestionsInput = document.getElementById('maxQuestions');
+const factsPerPlayerInput = document.getElementById('factsPerPlayer');
 const factsToPlayInput = document.getElementById('factsToPlay');
+const questionsPerPlayerInput = document.getElementById('questionsPerPlayer');
 const musicEnabledInput = document.getElementById('musicEnabled');
 const roomDiv = document.getElementById('room');
 const gameIconEl = document.getElementById('gameIcon');
@@ -37,8 +38,9 @@ const editSettingsForm = document.getElementById('editSettingsForm');
 const editRoomName = document.getElementById('editRoomName');
 const editRoomPassword = document.getElementById('editRoomPassword');
 const editRoundSeconds = document.getElementById('editRoundSeconds');
-const editMaxQuestions = document.getElementById('editMaxQuestions');
+const editFactsPerPlayer = document.getElementById('editFactsPerPlayer');
 const editFactsToPlay = document.getElementById('editFactsToPlay');
+const editQuestionsPerPlayer = document.getElementById('editQuestionsPerPlayer');
 const editMusicEnabled = document.getElementById('editMusicEnabled');
 const cancelEditSettingsBtn = document.getElementById('cancelEditSettings');
 const gameOverPanel = document.getElementById('gameOverPanel');
@@ -62,8 +64,9 @@ let musicUserMuted = false;
 let roomStatus = 'lobby';
 let currentRoomName = '';
 let currentRoundSeconds = 180;
-let currentMaxQuestions = null;
+let currentFactsPerPlayer = 1;
 let currentFactsToPlay = null;
+let currentQuestionsPerPlayer = null;
 let pendingLeaderboard = [];
 let pendingPodium = [];
 
@@ -403,15 +406,17 @@ function openRoomPanel({
   roomName,
   musicEnabled: me,
   roundSeconds,
-  maxQuestions,
-  factsToPlay
+  factsPerPlayer,
+  factsToPlay,
+  questionsPerPlayer
 }) {
   code = c;
   musicEnabled = Boolean(me);
   currentRoomName = roomName || '';
   currentRoundSeconds = roundSeconds || 180;
-  currentMaxQuestions = maxQuestions || null;
+  currentFactsPerPlayer = factsPerPlayer || 1;
   currentFactsToPlay = factsToPlay || null;
+  currentQuestionsPerPlayer = questionsPerPlayer || null;
   codeSpan.textContent = code;
   if (joinUrl) joinUrlInput.value = joinUrl;
   if (qrCode) qrImg.src = qrCode;
@@ -561,8 +566,9 @@ createForm.onsubmit = async e => {
         password: roomPasswordInput.value,
         name: roomNameInput.value,
         roundSeconds: roundSecondsInput.value || undefined,
-        maxQuestions: maxQuestionsInput.value || undefined,
+        factsPerPlayer: factsPerPlayerInput.value || undefined,
         factsToPlay: factsToPlayInput.value || undefined,
+        questionsPerPlayer: questionsPerPlayerInput.value || undefined,
         musicEnabled: musicEnabledInput.checked
       })
     });
@@ -642,8 +648,9 @@ editSettingsBtn.onclick = () => {
   editRoomName.value = currentRoomName;
   editRoomPassword.value = '';
   editRoundSeconds.value = String(currentRoundSeconds);
-  editMaxQuestions.value = currentMaxQuestions ? String(currentMaxQuestions) : '';
+  editFactsPerPlayer.value = String(currentFactsPerPlayer);
   editFactsToPlay.value = currentFactsToPlay ? String(currentFactsToPlay) : '';
+  editQuestionsPerPlayer.value = currentQuestionsPerPlayer ? String(currentQuestionsPerPlayer) : '';
   editMusicEnabled.checked = musicEnabled;
   editSettingsPanel.classList.remove('hidden');
   editSettingsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -658,8 +665,9 @@ editSettingsForm.onsubmit = async e => {
     hostToken,
     name: editRoomName.value,
     roundSeconds: editRoundSeconds.value,
-    maxQuestions: editMaxQuestions.value || '',
+    factsPerPlayer: editFactsPerPlayer.value || '',
     factsToPlay: editFactsToPlay.value || '',
+    questionsPerPlayer: editQuestionsPerPlayer.value || '',
     musicEnabled: editMusicEnabled.checked
   };
   // Only touch the password if the host actually typed a new one — an

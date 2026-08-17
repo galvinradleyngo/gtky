@@ -6,7 +6,14 @@ const PLAYER_ICONS = [
 ];
 
 const joinCard = document.getElementById('joinCard');
-const form = document.getElementById('joinForm');
+const codeForm = document.getElementById('codeForm');
+const codeInput = document.getElementById('codeInput');
+const detailsForm = document.getElementById('detailsForm');
+const roomPreview = document.getElementById('roomPreview');
+const previewIcon = document.getElementById('previewIcon');
+const previewName = document.getElementById('previewName');
+const factInputsEl = document.getElementById('factInputs');
+const backToCodeBtn = document.getElementById('backToCode');
 const iconPickerEl = document.getElementById('iconPicker');
 const joinErrorEl = document.getElementById('joinError');
 const gameDiv = document.getElementById('game');
@@ -38,8 +45,7 @@ let selectedIcon = PLAYER_ICONS[Math.floor(Math.random() * PLAYER_ICONS.length)]
 const params = new URLSearchParams(location.search);
 const prefillCode = params.get('code');
 if (prefillCode) {
-  form.code.value = prefillCode.toUpperCase();
-  form.name.focus();
+  codeInput.value = prefillCode.toUpperCase();
 }
 
 PLAYER_ICONS.forEach(icon => {
@@ -89,21 +95,74 @@ function stopCountdown() {
   }
 }
 
-form.onsubmit = async e => {
+function renderFactInputs(count) {
+  factInputsEl.innerHTML = '';
+  for (let i = 1; i <= count; i++) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = count === 1 ? 'Fun Fact About You' : `Fact ${i} About You`;
+    input.maxLength = 280;
+    input.required = true;
+    factInputsEl.appendChild(input);
+  }
+}
+
+codeForm.onsubmit = async e => {
+  e.preventDefault();
+  joinErrorEl.classList.add('hidden');
+  const lookupCode = codeInput.value.trim().toUpperCase();
+  if (!lookupCode) return;
+  const continueBtn = codeForm.querySelector('button[type="submit"]');
+  continueBtn.disabled = true;
+  try {
+    const res = await fetch(`/room-state?code=${lookupCode}`);
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      showError(data.error || 'Room not found.');
+      return;
+    }
+    code = lookupCode;
+    renderFactInputs(data.factsPerPlayer || 1);
+    if (data.icon) {
+      previewIcon.textContent = data.icon;
+      roomPreview.classList.remove('hidden');
+    }
+    if (data.roomName) {
+      previewName.textContent = data.roomName;
+      previewName.classList.remove('hidden');
+    } else {
+      previewName.classList.add('hidden');
+    }
+    codeForm.classList.add('hidden');
+    detailsForm.classList.remove('hidden');
+    detailsForm.name.focus();
+  } catch {
+    showError('Network error. Please try again.');
+  } finally {
+    continueBtn.disabled = false;
+  }
+};
+
+backToCodeBtn.onclick = () => {
+  joinErrorEl.classList.add('hidden');
+  detailsForm.classList.add('hidden');
+  codeForm.classList.remove('hidden');
+};
+
+detailsForm.onsubmit = async e => {
   e.preventDefault();
   if (window.GtkyMusic) window.GtkyMusic.unlock();
   joinErrorEl.classList.add('hidden');
-  code = form.code.value.trim().toUpperCase();
-  name = form.name.value.trim();
-  const fact = form.fact.value.trim();
-  if (!code || !name || !fact) return;
+  name = detailsForm.name.value.trim();
+  const facts = [...factInputsEl.querySelectorAll('input')].map(input => input.value.trim());
+  if (!name || facts.some(f => !f)) return;
 
   let data;
   try {
     const res = await fetch('/join-room', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, name, fact, icon: selectedIcon })
+      body: JSON.stringify({ code, name, facts, icon: selectedIcon })
     });
     data = await res.json();
     if (!res.ok || data.error) {
