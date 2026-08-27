@@ -4,6 +4,13 @@ Gotten to Know You is a lightweight, Kahoot-style icebreaker quiz. Everyone
 submits a fun fact about themselves, then races through a personal quiz —
 guessing who each *other* fact belongs to — before a shared timer runs out.
 
+## 🎮 Play Now
+
+The live game runs on Render — no install needed:
+
+- **[Create a game](https://gtky-u0y9.onrender.com/)** (host)
+- **[Join a game](https://gtky-u0y9.onrender.com/player.html)** (player)
+
 ## Running
 
 ```bash
@@ -73,14 +80,12 @@ Free-tier services spin down after ~15 minutes of no traffic and take
 ~30-50 seconds to wake back up on the next request, so open the host page
 a minute before you actually start a session.
 
-## GitHub Pages (landing page only)
+## This repo's front door
 
-GitHub Pages can only serve static files — it can't run `server.js`, so the
-actual game has to stay on Render (above). `docs/index.html` is a small,
-static landing page with a "Play Now" button pointing at the live Render
-URL; it's meant to be published via GitHub Pages so the repo itself has a
-friendly front door.
-
-To enable it: repo **Settings → Pages → Source: Deploy from a branch →
-Branch: `main`, folder: `/docs` → Save**. That's the one step that has to
-happen in the GitHub UI — it can't be done from a commit alone.
+GitHub can't run `server.js` itself (Pages only serves static files, and
+this app needs a persistent process for in-memory state and Server-Sent
+Events), so the "Play Now" links above are the front door — this README is
+what visitors to the repo page see first. To also surface a clickable link
+in the repo's sidebar, set repo **Settings → General → Website** to
+`https://gtky-u0y9.onrender.com/`. That's a GitHub UI step, not something a
+commit can do.
