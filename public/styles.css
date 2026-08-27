@@ -182,6 +182,46 @@ select:focus {
   background: #ffffff;
 }
 
+.fact-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.fact-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fact-input-label {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fact-input {
+  font-family: inherit;
+  font-size: clamp(1rem, 4vw, 1.15rem);
+  line-height: 1.4;
+  padding: 16px;
+  min-height: clamp(70px, 18vw, 96px);
+  border: 2px solid #e4e0fb;
+  border-radius: var(--radius);
+  background: #faf9ff;
+  color: var(--ink);
+  resize: vertical;
+  width: 100%;
+}
+
+.fact-input:focus {
+  outline: none;
+  border-color: var(--purple);
+  background: #ffffff;
+}
+
 .icon-picker {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
