@@ -8,13 +8,14 @@ const PLAYER_ICONS = [
 const joinCard = document.getElementById('joinCard');
 const codeForm = document.getElementById('codeForm');
 const codeInput = document.getElementById('codeInput');
-const detailsForm = document.getElementById('detailsForm');
+const nameForm = document.getElementById('nameForm');
 const roomPreview = document.getElementById('roomPreview');
 const previewIcon = document.getElementById('previewIcon');
 const previewName = document.getElementById('previewName');
-const factInputsEl = document.getElementById('factInputs');
 const backToCodeBtn = document.getElementById('backToCode');
 const iconPickerEl = document.getElementById('iconPicker');
+const factsForm = document.getElementById('factsForm');
+const factInputsEl = document.getElementById('factInputs');
 const joinErrorEl = document.getElementById('joinError');
 const gameDiv = document.getElementById('game');
 const gameIconEl = document.getElementById('gameIcon');
@@ -34,6 +35,7 @@ const removeStatusEl = document.getElementById('removeStatus');
 
 let code;
 let name;
+let factsPerPlayer = 1;
 let source;
 let hasAnswered = false;
 let musicEnabled = false;
@@ -98,12 +100,23 @@ function stopCountdown() {
 function renderFactInputs(count) {
   factInputsEl.innerHTML = '';
   for (let i = 1; i <= count; i++) {
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.placeholder = count === 1 ? 'Fun Fact About You' : `Fact ${i} About You`;
-    input.maxLength = 280;
-    input.required = true;
-    factInputsEl.appendChild(input);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'fact-input-wrapper';
+
+    const label = document.createElement('label');
+    label.className = 'fact-input-label';
+    label.textContent = count === 1 ? 'Your fun fact' : `Fact ${i}`;
+
+    const textarea = document.createElement('textarea');
+    textarea.className = 'fact-input';
+    textarea.placeholder = 'Something fun about you...';
+    textarea.maxLength = 280;
+    textarea.required = true;
+    textarea.rows = 2;
+
+    wrapper.appendChild(label);
+    wrapper.appendChild(textarea);
+    factInputsEl.appendChild(wrapper);
   }
 }
 
@@ -122,7 +135,7 @@ codeForm.onsubmit = async e => {
       return;
     }
     code = lookupCode;
-    renderFactInputs(data.factsPerPlayer || 1);
+    factsPerPlayer = data.factsPerPlayer || 1;
     if (data.icon) {
       previewIcon.textContent = data.icon;
       roomPreview.classList.remove('hidden');
@@ -134,8 +147,8 @@ codeForm.onsubmit = async e => {
       previewName.classList.add('hidden');
     }
     codeForm.classList.add('hidden');
-    detailsForm.classList.remove('hidden');
-    detailsForm.name.focus();
+    nameForm.classList.remove('hidden');
+    nameForm.name.focus();
   } catch {
     showError('Network error. Please try again.');
   } finally {
@@ -145,24 +158,25 @@ codeForm.onsubmit = async e => {
 
 backToCodeBtn.onclick = () => {
   joinErrorEl.classList.add('hidden');
-  detailsForm.classList.add('hidden');
+  nameForm.classList.add('hidden');
   codeForm.classList.remove('hidden');
 };
 
-detailsForm.onsubmit = async e => {
+// Registers name + avatar right away, so the host sees the player show up
+// on their screen immediately — facts are collected as a separate step
+// right after, rather than holding up the player's appearance on the roster.
+nameForm.onsubmit = async e => {
   e.preventDefault();
-  if (window.GtkyMusic) window.GtkyMusic.unlock();
   joinErrorEl.classList.add('hidden');
-  name = detailsForm.name.value.trim();
-  const facts = [...factInputsEl.querySelectorAll('input')].map(input => input.value.trim());
-  if (!name || facts.some(f => !f)) return;
+  name = nameForm.name.value.trim();
+  if (!name) return;
 
   let data;
   try {
     const res = await fetch('/join-room', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, name, facts, icon: selectedIcon })
+      body: JSON.stringify({ code, name, icon: selectedIcon })
     });
     data = await res.json();
     if (!res.ok || data.error) {
@@ -181,6 +195,34 @@ detailsForm.onsubmit = async e => {
     roomNameDisplay.classList.remove('hidden');
   } else {
     roomNameDisplay.classList.add('hidden');
+  }
+
+  renderFactInputs(factsPerPlayer);
+  nameForm.classList.add('hidden');
+  factsForm.classList.remove('hidden');
+};
+
+factsForm.onsubmit = async e => {
+  e.preventDefault();
+  if (window.GtkyMusic) window.GtkyMusic.unlock();
+  joinErrorEl.classList.add('hidden');
+  const facts = [...factInputsEl.querySelectorAll('textarea')].map(t => t.value.trim());
+  if (facts.some(f => !f)) return;
+
+  try {
+    const res = await fetch('/submit-facts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, name, facts })
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      showError(data.error || 'Could not submit your facts.');
+      return;
+    }
+  } catch {
+    showError('Network error. Please try again.');
+    return;
   }
 
   joinCard.classList.add('hidden');

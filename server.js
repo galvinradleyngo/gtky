@@ -419,6 +419,50 @@ function handleAPI(req, res) {
       const room = rooms.get(code);
       if (!room) return send(res, 404, { error: 'room not found' });
 
+      const requestedIcon = String(body.icon || '');
+      const playerIcon = PLAYER_ICONS.includes(requestedIcon)
+        ? requestedIcon
+        : PLAYER_ICONS[Math.floor(Math.random() * PLAYER_ICONS.length)];
+      // Room passwords authenticate the host reopening a saved game, not
+      // players joining — anyone with the code/link/QR can join freely.
+      const taken = [...room.players.keys()].some(
+        n => n.toLowerCase() === name.toLowerCase()
+      );
+      if (taken) return send(res, 400, { error: 'that name is already taken in this room' });
+      // Registering just needs a name + avatar — the player shows up on the
+      // host's screen immediately. Their facts (however many the room
+      // requires) are submitted separately via /submit-facts right after.
+      room.players.set(name, { facts: [], score: 0, icon: playerIcon });
+      room.lastActivity = Date.now();
+      broadcastAll(code, { type: 'roster', players: rosterList(room) });
+      send(res, 200, {
+        ok: true,
+        name,
+        playerIcon,
+        icon: room.icon,
+        roomName: room.name,
+        roundSeconds: room.roundSeconds,
+        factsPerPlayer: room.factsPerPlayer,
+        factsToPlay: room.factsToPlay,
+        musicEnabled: room.musicEnabled
+      });
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/submit-facts') {
+    parseBody(req, (err, body) => {
+      if (err) return send(res, 400, { error: 'invalid request body' });
+      const code = String(body.code || '').trim().toUpperCase();
+      const name = String(body.name || '').trim();
+      const room = rooms.get(code);
+      if (!room) return send(res, 404, { error: 'room not found' });
+      const player = room.players.get(name);
+      if (!player) return send(res, 404, { error: 'you are not registered in this room' });
+      if (room.status !== 'lobby') {
+        return send(res, 400, { error: 'the game has already started' });
+      }
+
       const rawFacts = Array.isArray(body.facts) ? body.facts : [];
       const facts = rawFacts.map(f => String(f || '').trim());
       if (facts.length !== room.factsPerPlayer) {
@@ -433,30 +477,9 @@ function handleAPI(req, res) {
         return send(res, 400, { error: 'each fact must be 280 characters or fewer' });
       }
 
-      const requestedIcon = String(body.icon || '');
-      const playerIcon = PLAYER_ICONS.includes(requestedIcon)
-        ? requestedIcon
-        : PLAYER_ICONS[Math.floor(Math.random() * PLAYER_ICONS.length)];
-      // Room passwords authenticate the host reopening a saved game, not
-      // players joining — anyone with the code/link/QR can join freely.
-      const taken = [...room.players.keys()].some(
-        n => n.toLowerCase() === name.toLowerCase()
-      );
-      if (taken) return send(res, 400, { error: 'that name is already taken in this room' });
-      room.players.set(name, { facts, score: 0, icon: playerIcon });
+      player.facts = facts;
       room.lastActivity = Date.now();
-      broadcastAll(code, { type: 'roster', players: rosterList(room) });
-      send(res, 200, {
-        ok: true,
-        name,
-        playerIcon,
-        icon: room.icon,
-        roomName: room.name,
-        roundSeconds: room.roundSeconds,
-        factsPerPlayer: room.factsPerPlayer,
-        factsToPlay: room.factsToPlay,
-        musicEnabled: room.musicEnabled
-      });
+      send(res, 200, { ok: true });
     });
     return;
   }
@@ -533,9 +556,15 @@ function handleAPI(req, res) {
       if (room.status === 'complete') {
         return send(res, 400, { error: 'this game has ended; create a new room to play again' });
       }
-      const names = [...room.players.keys()];
+      // Only players who've actually submitted their facts are eligible to
+      // be quizzed on or receive a queue — someone who registered a name
+      // but hasn't finished the facts step yet is still visible on the
+      // roster, but treated like a late joiner once the round starts.
+      const names = [...room.players.entries()]
+        .filter(([, p]) => p.facts.length === room.factsPerPlayer)
+        .map(([n]) => n);
       if (names.length < 2) {
-        return send(res, 400, { error: 'need at least 2 players to start' });
+        return send(res, 400, { error: 'need at least 2 players who have submitted their facts to start' });
       }
 
       // Three independent settings shape the round:
@@ -745,6 +774,7 @@ function requestListener(req, res) {
     pathname.startsWith('/update-room') ||
     pathname.startsWith('/verify-password') ||
     pathname.startsWith('/join-room') ||
+    pathname.startsWith('/submit-facts') ||
     pathname.startsWith('/room-state') ||
     pathname.startsWith('/player-history') ||
     pathname.startsWith('/events') ||

@@ -87,10 +87,22 @@ async function createRoom(base, opts = {}) {
   return res.json();
 }
 
+// Joining is a two-step server flow now: register (name + avatar, shows up
+// on the roster immediately) then submit-facts (the personal blank count).
+// This helper does both in sequence for tests that just want a fully
+// participating player, merging the two responses so existing assertions
+// against fields like .icon/.playerIcon/.roundSeconds (all from the
+// register step) keep working unchanged.
 async function joinRoom(base, code, name, fact, extra = {}) {
   const { facts, ...rest } = extra;
-  const res = await postJSON(base, '/join-room', { code, name, facts: facts || [fact], ...rest });
-  return { status: res.status, body: await res.json() };
+  const registerRes = await postJSON(base, '/join-room', { code, name, ...rest });
+  const registerBody = await registerRes.json();
+  if (registerRes.status !== 200) {
+    return { status: registerRes.status, body: registerBody };
+  }
+  const submitRes = await postJSON(base, '/submit-facts', { code, name, facts: facts || [fact] });
+  const submitBody = await submitRes.json();
+  return { status: submitRes.status, body: { ...registerBody, ...submitBody } };
 }
 
 test('createServer returns an http server', () => {
@@ -179,21 +191,46 @@ test('factsPerPlayer is validated, defaults to 1, and requires each joiner to su
     const room = await createRoom(base, { factsPerPlayer: 2 });
     assert.strictEqual(room.factsPerPlayer, 2);
 
-    const tooFew = await postJSON(base, '/join-room', {
+    // Registering (name + avatar) is a separate step from submitting facts —
+    // the player shows up on the host's roster as soon as they register,
+    // before they've submitted any facts at all.
+    const registered = await postJSON(base, '/join-room', { code: room.code, name: 'Ana' });
+    assert.strictEqual(registered.status, 200);
+    const rosterAfterRegister = await getJSON(base, `/room-state?code=${room.code}`);
+    assert.deepStrictEqual(
+      rosterAfterRegister.body.players.map(p => p.name),
+      ['Ana']
+    );
+
+    const tooFew = await postJSON(base, '/submit-facts', {
       code: room.code,
       name: 'Ana',
       facts: ['only one fact']
     });
     assert.strictEqual(tooFew.status, 400);
 
-    const blankFact = await postJSON(base, '/join-room', {
+    const blankFact = await postJSON(base, '/submit-facts', {
       code: room.code,
       name: 'Ana',
       facts: ['likes tea', '   ']
     });
     assert.strictEqual(blankFact.status, 400);
 
-    const names = ['Ana', 'Bo', 'Cy'];
+    const unregisteredPlayer = await postJSON(base, '/submit-facts', {
+      code: room.code,
+      name: 'Ghost',
+      facts: ['x', 'y']
+    });
+    assert.strictEqual(unregisteredPlayer.status, 404);
+
+    const finishAna = await postJSON(base, '/submit-facts', {
+      code: room.code,
+      name: 'Ana',
+      facts: ['Ana fact A', 'Ana fact B']
+    });
+    assert.strictEqual(finishAna.status, 200);
+
+    const names = ['Bo', 'Cy'];
     for (const n of names) {
       const res = await joinRoom(base, room.code, n, null, { facts: [`${n} fact A`, `${n} fact B`] });
       assert.strictEqual(res.status, 200);
@@ -212,6 +249,32 @@ test('factsPerPlayer is validated, defaults to 1, and requires each joiner to su
     assert.strictEqual(msg.type, 'question');
     assert.strictEqual(msg.totalQuestions, 2); // 2 other players, 1 question each
     stream.close();
+  });
+});
+
+test('the host sees a player on the roster the instant they register, before facts are submitted', async () => {
+  await withServer(async base => {
+    const room = await createRoom(base, { factsPerPlayer: 2 });
+    const hostStream = await openSSE(base, room.code, null);
+
+    const registered = await postJSON(base, '/join-room', {
+      code: room.code,
+      name: 'Ana',
+      icon: PLAYER_ICONS[3]
+    });
+    assert.strictEqual(registered.status, 200);
+
+    const rosterMsg = await hostStream.next();
+    assert.strictEqual(rosterMsg.type, 'roster');
+    assert.strictEqual(rosterMsg.players.length, 1);
+    assert.strictEqual(rosterMsg.players[0].name, 'Ana');
+    assert.strictEqual(rosterMsg.players[0].icon, PLAYER_ICONS[3]);
+
+    // still shows up even though facts haven't been submitted yet
+    const midState = await getJSON(base, `/room-state?code=${room.code}`);
+    assert.strictEqual(midState.body.players.length, 1);
+
+    hostStream.close();
   });
 });
 

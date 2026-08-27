@@ -18,20 +18,24 @@
         <button type="submit" class="primary">Continue</button>
       </form>
 
-      <form id="detailsForm" class="hidden">
+      <form id="nameForm" class="hidden">
         <div id="roomPreview" class="join-panel hidden">
           <div id="previewIcon" class="icon-badge small"></div>
           <h2 id="previewName" class="hidden"></h2>
         </div>
         <input type="text" name="name" placeholder="Your Name" maxlength="40" required />
-        <label class="hint" style="text-align: left; margin-bottom: -4px;">Your fun facts about yourself</label>
-        <div id="factInputs"></div>
         <label class="hint" style="text-align: left; margin-bottom: -4px;">Pick your avatar</label>
         <div id="iconPicker" class="icon-picker"></div>
         <div class="controls">
           <button type="submit" class="primary">Join</button>
           <button id="backToCode" type="button" class="secondary">Back</button>
         </div>
+      </form>
+
+      <form id="factsForm" class="hidden">
+        <label class="hint" style="text-align: left; margin-bottom: -4px;">Your fun facts about yourself</label>
+        <div id="factInputs" class="fact-inputs"></div>
+        <button type="submit" class="primary">Submit</button>
       </form>
 
       <p id="joinError" class="error hidden" style="margin-top: 10px;"></p>
