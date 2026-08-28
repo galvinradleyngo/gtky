@@ -4,6 +4,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
+import { initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +32,123 @@ const ROOM_TTL_MS = 2 * 60 * 60 * 1000;
 export const MAX_ROOM_AGE_MS = 14 * 24 * 60 * 60 * 1000; // hard cap: nothing outlives 2 weeks
 
 const rooms = new Map();
+
+// --- Firestore persistence (optional) ---
+// The in-memory `rooms` Map above stays the source of truth for every
+// request — all existing validation/game logic is untouched and runs
+// synchronously against it exactly as before. Firestore is layered on top
+// purely as a durable backing store: every mutation is mirrored there
+// (awaited before the response goes out, so a write in flight when the
+// process gets killed — e.g. Cloud Run scaling down — isn't silently
+// lost) and on startup the Map is rehydrated from it. This is opt-in via
+// FIRESTORE_ENABLED=1 so local dev and `npm test` behave exactly as
+// before unless explicitly told otherwise (e.g. on Cloud Run).
+const FIRESTORE_ENABLED = process.env.FIRESTORE_ENABLED === '1';
+let db = null;
+if (FIRESTORE_ENABLED) {
+  try {
+    initializeApp();
+    db = getFirestore();
+  } catch (err) {
+    console.error('Firestore persistence requested but failed to initialize; continuing without it:', err.message);
+  }
+}
+
+export function serializeRoom(room) {
+  return {
+    status: room.status,
+    endsAt: room.endsAt,
+    roundSeconds: room.roundSeconds,
+    factsPerPlayer: room.factsPerPlayer,
+    factsToPlay: room.factsToPlay,
+    questionsPerPlayer: room.questionsPerPlayer,
+    musicEnabled: room.musicEnabled,
+    hostToken: room.hostToken,
+    password: room.password,
+    icon: room.icon,
+    name: room.name,
+    createdAt: room.createdAt,
+    lastActivity: room.lastActivity,
+    players: Object.fromEntries(room.players),
+    queues: Object.fromEntries(room.queues),
+    progress: Object.fromEntries(room.progress),
+    answerLog: Object.fromEntries(room.answerLog)
+  };
+}
+
+export function deserializeRoom(data) {
+  return {
+    players: new Map(Object.entries(data.players || {})),
+    clients: [],
+    status: data.status,
+    queues: new Map(Object.entries(data.queues || {})),
+    progress: new Map(Object.entries(data.progress || {})),
+    answerLog: new Map(Object.entries(data.answerLog || {})),
+    endsAt: data.endsAt,
+    timer: null,
+    roundSeconds: data.roundSeconds,
+    factsPerPlayer: data.factsPerPlayer,
+    factsToPlay: data.factsToPlay,
+    questionsPerPlayer: data.questionsPerPlayer,
+    musicEnabled: data.musicEnabled,
+    hostToken: data.hostToken,
+    password: data.password,
+    icon: data.icon,
+    name: data.name,
+    createdAt: data.createdAt,
+    lastActivity: data.lastActivity
+  };
+}
+
+// These are always awaited by callers before sending an HTTP response (or,
+// for the timer-driven paths, before that callback finishes) rather than
+// fired-and-forgotten -- a live process can be killed (Cloud Run sends
+// SIGTERM on scale-down/redeploy) moments after a response goes out, and an
+// in-flight write with no one waiting on it can simply never happen. The
+// internal .catch keeps a Firestore hiccup from ever rejecting and blocking
+// the response that depends on it; it just gets logged.
+function persistRoom(code, room) {
+  if (!db) return Promise.resolve();
+  return db.collection('rooms').doc(code).set(serializeRoom(room))
+    .catch(err => console.error(`Firestore: failed to persist room ${code}:`, err.message));
+}
+
+function persistRoomDeletion(code) {
+  if (!db) return Promise.resolve();
+  return db.collection('rooms').doc(code).delete()
+    .catch(err => console.error(`Firestore: failed to delete room ${code}:`, err.message));
+}
+
+function touchRoom(code, room) {
+  room.lastActivity = Date.now();
+  return persistRoom(code, room);
+}
+
+async function loadRoomsFromFirestore() {
+  if (!db) return;
+  const snapshot = await db.collection('rooms').get();
+  const now = Date.now();
+  snapshot.forEach(doc => {
+    const room = deserializeRoom(doc.data());
+    rooms.set(doc.id, room);
+    // Re-arm the round timer for a game that was mid-round when the
+    // process last stopped; if time already ran out while we were down,
+    // finalize it immediately instead of leaving it stuck 'active'.
+    if (room.status === 'active' && typeof room.endsAt === 'number') {
+      const remaining = room.endsAt - now;
+      if (remaining <= 0) {
+        finalizeGame(room, doc.id);
+      } else {
+        room.timer = setTimeout(() => {
+          const current = rooms.get(doc.id);
+          if (current === room && room.status === 'active') finalizeGame(room, doc.id);
+        }, remaining + 250);
+        room.timer.unref?.();
+      }
+    }
+  });
+  console.log(`Firestore: rehydrated ${snapshot.size} room(s)`);
+}
 
 function send(res, status, data, type = 'application/json') {
   res.writeHead(status, { 'Content-Type': type });
@@ -100,7 +219,7 @@ function clearRoomTimer(room) {
   }
 }
 
-function deleteRoom(code) {
+async function deleteRoom(code) {
   const room = rooms.get(code);
   if (!room) return;
   clearRoomTimer(room);
@@ -113,6 +232,7 @@ function deleteRoom(code) {
     }
   });
   rooms.delete(code);
+  await persistRoomDeletion(code);
 }
 
 function generateCode() {
@@ -184,13 +304,14 @@ function erasePersonalData(room) {
   }
 }
 
-function finalizeGame(room, code) {
+async function finalizeGame(room, code) {
   clearRoomTimer(room);
   room.status = 'complete';
   room.lastActivity = Date.now();
   const leaderboard = getLeaderboard(room);
   broadcastAll(code, { type: 'game-over', leaderboard, podium: leaderboard.slice(0, 3) });
   erasePersonalData(room);
+  await persistRoom(code, room);
 }
 
 function completedCount(room) {
@@ -268,7 +389,7 @@ function sendWithQr(req, res, code, base, includeQr = true) {
 
 function handleAPI(req, res) {
   if (req.method === 'POST' && req.url === '/create-room') {
-    parseBody(req, (err, body) => {
+    parseBody(req, async (err, body) => {
       if (err) return send(res, 400, { error: 'invalid request body' });
       const password = String(body.password || '').trim();
       if (password.length > 60) return send(res, 400, { error: 'password is too long' });
@@ -296,7 +417,7 @@ function handleAPI(req, res) {
       const code = generateCode();
       const hostToken = crypto.randomBytes(16).toString('hex');
       const icon = GAME_ICONS[Math.floor(Math.random() * GAME_ICONS.length)];
-      rooms.set(code, {
+      const room = {
         players: new Map(),
         clients: [],
         status: 'lobby',
@@ -316,7 +437,9 @@ function handleAPI(req, res) {
         name,
         createdAt: Date.now(),
         lastActivity: Date.now()
-      });
+      };
+      rooms.set(code, room);
+      await persistRoom(code, room);
       sendWithQr(req, res, code, {
         code,
         hostToken,
@@ -334,7 +457,7 @@ function handleAPI(req, res) {
   }
 
   if (req.method === 'POST' && req.url === '/update-room') {
-    parseBody(req, (err, body) => {
+    parseBody(req, async (err, body) => {
       if (err) return send(res, 400, { error: 'invalid request body' });
       const code = String(body.code || '').toUpperCase();
       const room = rooms.get(code);
@@ -380,7 +503,7 @@ function handleAPI(req, res) {
         room.musicEnabled = Boolean(body.musicEnabled);
       }
 
-      room.lastActivity = Date.now();
+      await touchRoom(code, room);
       sendWithQr(req, res, code, {
         code,
         roomName: room.name,
@@ -412,7 +535,7 @@ function handleAPI(req, res) {
   }
 
   if (req.method === 'POST' && req.url === '/join-room') {
-    parseBody(req, (err, body) => {
+    parseBody(req, async (err, body) => {
       if (err) return send(res, 400, { error: 'invalid request body' });
       const code = String(body.code || '').trim().toUpperCase();
       const name = String(body.name || '').trim();
@@ -437,7 +560,7 @@ function handleAPI(req, res) {
       // host's screen immediately. Their facts (however many the room
       // requires) are submitted separately via /submit-facts right after.
       room.players.set(name, { facts: [], score: 0, icon: playerIcon });
-      room.lastActivity = Date.now();
+      await touchRoom(code, room);
       broadcastAll(code, { type: 'roster', players: rosterList(room) });
       send(res, 200, {
         ok: true,
@@ -455,7 +578,7 @@ function handleAPI(req, res) {
   }
 
   if (req.method === 'POST' && req.url === '/submit-facts') {
-    parseBody(req, (err, body) => {
+    parseBody(req, async (err, body) => {
       if (err) return send(res, 400, { error: 'invalid request body' });
       const code = String(body.code || '').trim().toUpperCase();
       const name = String(body.name || '').trim();
@@ -482,7 +605,7 @@ function handleAPI(req, res) {
       }
 
       player.facts = facts;
-      room.lastActivity = Date.now();
+      await touchRoom(code, room);
       send(res, 200, { ok: true });
     });
     return;
@@ -557,7 +680,7 @@ function handleAPI(req, res) {
   }
 
   if (req.method === 'POST' && req.url === '/start') {
-    parseBody(req, (err, body) => {
+    parseBody(req, async (err, body) => {
       if (err) return send(res, 400, { error: 'invalid request body' });
       const code = String(body.code || '').toUpperCase();
       const room = rooms.get(code);
@@ -623,7 +746,7 @@ function handleAPI(req, res) {
       }
       room.status = 'active';
       room.endsAt = Date.now() + room.roundSeconds * 1000;
-      room.lastActivity = Date.now();
+      await touchRoom(code, room);
 
       broadcastEach(code, client => {
         const queue = room.queues.get(client.name);
@@ -659,7 +782,7 @@ function handleAPI(req, res) {
   }
 
   if (req.method === 'POST' && req.url === '/answer') {
-    parseBody(req, (err, body) => {
+    parseBody(req, async (err, body) => {
       if (err) return send(res, 400, { error: 'invalid request body' });
       const code = String(body.code || '').toUpperCase();
       const name = String(body.name || '');
@@ -688,7 +811,7 @@ function handleAPI(req, res) {
         correct
       });
       room.progress.set(name, idx + 1);
-      room.lastActivity = Date.now();
+      await touchRoom(code, room);
 
       const finishedNow = idx + 1 >= queue.length;
       broadcastAll(code, {
@@ -700,7 +823,7 @@ function handleAPI(req, res) {
       });
 
       if (completedCount(room) >= room.players.size) {
-        finalizeGame(room, code);
+        await finalizeGame(room, code);
       }
 
       if (finishedNow) {
@@ -723,7 +846,7 @@ function handleAPI(req, res) {
   }
 
   if (req.method === 'POST' && req.url === '/end') {
-    parseBody(req, (err, body) => {
+    parseBody(req, async (err, body) => {
       if (err) return send(res, 400, { error: 'invalid request body' });
       const code = String(body.code || '').toUpperCase();
       const room = rooms.get(code);
@@ -734,14 +857,14 @@ function handleAPI(req, res) {
       if (room.status === 'complete') {
         return send(res, 400, { error: 'this game has already ended' });
       }
-      finalizeGame(room, code);
+      await finalizeGame(room, code);
       send(res, 200, { ok: true });
     });
     return;
   }
 
   if (req.method === 'POST' && req.url === '/delete-room') {
-    parseBody(req, (err, body) => {
+    parseBody(req, async (err, body) => {
       if (err) return send(res, 400, { error: 'invalid request body' });
       const code = String(body.code || '').toUpperCase();
       const room = rooms.get(code);
@@ -749,14 +872,14 @@ function handleAPI(req, res) {
       if (room.hostToken !== body.hostToken) {
         return send(res, 403, { error: 'not authorized' });
       }
-      deleteRoom(code);
+      await deleteRoom(code);
       send(res, 200, { ok: true });
     });
     return;
   }
 
   if (req.method === 'POST' && req.url === '/remove-me') {
-    parseBody(req, (err, body) => {
+    parseBody(req, async (err, body) => {
       if (err) return send(res, 400, { error: 'invalid request body' });
       const code = String(body.code || '').toUpperCase();
       const name = String(body.name || '').trim();
@@ -764,7 +887,7 @@ function handleAPI(req, res) {
       if (!room) return send(res, 404, { error: 'room not found' });
       if (!room.players.has(name)) return send(res, 404, { error: 'player not found' });
       room.players.delete(name);
-      room.lastActivity = Date.now();
+      await touchRoom(code, room);
       broadcastAll(code, { type: 'roster', players: rosterList(room) });
       broadcastAll(code, { type: 'leaderboard', leaderboard: getLeaderboard(room) });
       send(res, 200, { ok: true });
@@ -819,7 +942,11 @@ export function createServer() {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const PORT = process.env.PORT || 3000;
-  createServer().listen(PORT, () =>
-    console.log(`Server running on port ${PORT}`)
-  );
+  loadRoomsFromFirestore()
+    .catch(err => console.error('Firestore: failed to rehydrate rooms on startup:', err.message))
+    .finally(() => {
+      createServer().listen(PORT, () =>
+        console.log(`Server running on port ${PORT}`)
+      );
+    });
 }

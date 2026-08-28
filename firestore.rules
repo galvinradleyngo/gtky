@@ -1,0 +1,15 @@
+rules_version = '2';
+
+// Firestore here is purely a private backing store for server.js (accessed
+// only via the Admin SDK on Cloud Run, which bypasses these rules entirely).
+// No browser client ever talks to Firestore directly -- players and hosts
+// only ever go through the Node server's own validated HTTP endpoints,
+// exactly as they do today on Render. So every direct client read/write is
+// denied outright; this is a safety net, not something normal use ever hits.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
