@@ -24,7 +24,8 @@ Then open `http://localhost:3000` in a browser.
 - Name the room, optionally password protect it, set the round timer, and
   toggle background music — no accounts needed
 - Every room gets a random icon as its logo, shown to host and players alike
-- Join with a name and a single fun fact, from any device
+- Join with a name, an avatar, and one or more fun facts about yourself
+  (however many the host asks for), from any device
 - Once the host starts the game, each player gets their own shuffled quiz —
   every other player's fact, but never their own — and answers at their own
   pace against a shared countdown
@@ -80,12 +81,16 @@ Free-tier services spin down after ~15 minutes of no traffic and take
 ~30-50 seconds to wake back up on the next request, so open the host page
 a minute before you actually start a session.
 
-## This repo's front door
+## GitHub Pages (landing page only)
 
-GitHub can't run `server.js` itself (Pages only serves static files, and
-this app needs a persistent process for in-memory state and Server-Sent
-Events), so the "Play Now" links above are the front door — this README is
-what visitors to the repo page see first. To also surface a clickable link
-in the repo's sidebar, set repo **Settings → General → Website** to
-`https://gtky-u0y9.onrender.com/`. That's a GitHub UI step, not something a
-commit can do.
+GitHub Pages is enabled on this repo (Settings → Pages → source: `/docs` on
+`main`) and can only serve static files — it can't run `server.js`, so the
+actual game has to stay on Render (above). `docs/index.html` is a small
+static landing page with "Create a Game"/"Join a Game" buttons pointing at
+the live Render URL, published automatically on every push to `main`.
+
+Don't delete `docs/` without also disabling Pages in repo settings first
+(Settings → Pages → Source → None) — otherwise the Pages build workflow
+keeps running against a folder that no longer exists and shows as failing
+in the Actions tab, even though it doesn't affect the live Render app at
+all.

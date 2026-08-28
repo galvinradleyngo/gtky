@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gotten to Know You</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --purple: #5b3df5;
+    --purple-dark: #4527d6;
+    --blue: #2563eb;
+    --ink: #1f1147;
+    --muted: #6b6383;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    padding: 24px 16px 48px;
+    min-height: 100vh;
+    color: var(--ink);
+    background: linear-gradient(160deg, #6a4bf5, #9333ea 60%);
+  }
+  .page { max-width: 480px; margin: 0 auto; }
+  h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    color: #ffffff;
+    font-size: 2.1rem;
+    text-align: center;
+    margin: 8px 0 4px;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
+  }
+  .tagline {
+    text-align: center;
+    color: #ffffff;
+    opacity: 0.9;
+    font-weight: 500;
+    margin: 0 0 20px;
+  }
+  .card {
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 12px 30px rgba(31, 17, 71, 0.25);
+    padding: 22px;
+    margin-bottom: 16px;
+  }
+  p { line-height: 1.5; }
+  .play-btn {
+    display: block;
+    text-align: center;
+    padding: 18px 20px;
+    background: var(--purple);
+    color: white;
+    text-decoration: none;
+    border-radius: 999px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 1.2rem;
+    box-shadow: 0 4px 0 var(--purple-dark);
+    transition: transform 0.12s ease;
+  }
+  .play-btn:hover { transform: translateY(-2px); }
+  .play-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--purple-dark); }
+  .play-btn.secondary {
+    background: #e0edff;
+    color: var(--blue);
+    box-shadow: 0 4px 0 #b9d4fb;
+    margin-top: 12px;
+  }
+  .hint {
+    color: var(--muted);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <h1>🎉 Gotten to Know You</h1>
+    <p class="tagline">A Kahoot-style icebreaker quiz — guess who each fun fact belongs to.</p>
+
+    <div class="card">
+      <a class="play-btn" href="https://gtky-u0y9.onrender.com/">🎮 Create a Game</a>
+      <a class="play-btn secondary" href="https://gtky-u0y9.onrender.com/player.html">🙋 Join a Game</a>
+      <p class="hint" style="margin-top: 16px;">
+        No install or account needed — everything runs in your browser.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
