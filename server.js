@@ -255,8 +255,12 @@ function joinUrlFor(req, code) {
   return `${proto}://${req.headers.host}/j/${code}`;
 }
 
-function sendWithQr(req, res, code, base) {
+function sendWithQr(req, res, code, base, includeQr = true) {
   const joinUrl = joinUrlFor(req, code);
+  if (!includeQr) {
+    send(res, 200, { ...base, joinUrl, qrCode: null });
+    return;
+  }
   QRCode.toDataURL(joinUrl, { margin: 1, width: 240 })
     .then(qrCode => send(res, 200, { ...base, joinUrl, qrCode }))
     .catch(() => send(res, 200, { ...base, joinUrl, qrCode: null }));
@@ -489,21 +493,32 @@ function handleAPI(req, res) {
     const code = (url.searchParams.get('code') || '').toUpperCase();
     const room = rooms.get(code);
     if (!room) return send(res, 404, { error: 'room not found' });
-    sendWithQr(req, res, code, {
+    // QR generation is real (if small) CPU work — only the host's resume
+    // flow needs it to redraw the join panel. Players looking up a room
+    // code (to find out how many fact blanks to show) never touch it, so
+    // skip generating one for them; it's opt-in via ?qr=1.
+    const includeQr = url.searchParams.get('qr') === '1';
+    sendWithQr(
+      req,
+      res,
       code,
-      status: room.status,
-      endsAt: room.endsAt,
-      roundSeconds: room.roundSeconds,
-      factsPerPlayer: room.factsPerPlayer,
-      factsToPlay: room.factsToPlay,
-      questionsPerPlayer: room.questionsPerPlayer,
-      musicEnabled: room.musicEnabled,
-      icon: room.icon,
-      roomName: room.name,
-      passwordProtected: Boolean(room.password),
-      players: [...room.players.entries()].map(([name, p]) => ({ name, score: p.score, icon: p.icon })),
-      leaderboard: getLeaderboard(room)
-    });
+      {
+        code,
+        status: room.status,
+        endsAt: room.endsAt,
+        roundSeconds: room.roundSeconds,
+        factsPerPlayer: room.factsPerPlayer,
+        factsToPlay: room.factsToPlay,
+        questionsPerPlayer: room.questionsPerPlayer,
+        musicEnabled: room.musicEnabled,
+        icon: room.icon,
+        roomName: room.name,
+        passwordProtected: Boolean(room.password),
+        players: [...room.players.entries()].map(([name, p]) => ({ name, score: p.score, icon: p.icon })),
+        leaderboard: getLeaderboard(room)
+      },
+      includeQr
+    );
     return;
   }
 

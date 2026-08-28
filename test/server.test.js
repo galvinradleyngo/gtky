@@ -156,6 +156,21 @@ test('create-room assigns a unique code, random icon, QR code, and defaults', as
   });
 });
 
+test('/room-state only generates a QR code when explicitly asked (?qr=1) — cheap for players looking up a room', async () => {
+  await withServer(async base => {
+    const room = await createRoom(base);
+
+    const withoutQr = await getJSON(base, `/room-state?code=${room.code}`);
+    assert.strictEqual(withoutQr.status, 200);
+    assert.strictEqual(withoutQr.body.qrCode, null);
+    assert.ok(withoutQr.body.joinUrl.includes(room.code)); // joinUrl is still cheap, always included
+
+    const withQr = await getJSON(base, `/room-state?code=${room.code}&qr=1`);
+    assert.strictEqual(withQr.status, 200);
+    assert.ok(withQr.body.qrCode.startsWith('data:image'));
+  });
+});
+
 test('create-room accepts a custom name, round timer, and music flag', async () => {
   await withServer(async base => {
     const room = await createRoom(base, { name: 'Trivia Night', roundSeconds: 60, musicEnabled: true });
