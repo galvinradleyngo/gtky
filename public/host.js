@@ -752,7 +752,7 @@ deleteRoomBtn.onclick = async () => {
 
 async function resumeRoom(roomCode, token) {
   try {
-    const res = await fetch(`/room-state?code=${roomCode}`);
+    const res = await fetch(`/room-state?code=${roomCode}&qr=1`);
     if (!res.ok) return false;
     const state = await res.json();
     hostToken = token;
