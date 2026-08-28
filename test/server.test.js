@@ -1,7 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import http from 'node:http';
-import { createServer, isRoomStale, MAX_ROOM_AGE_MS, GAME_ICONS, PLAYER_ICONS } from '../server.js';
+import {
+  createServer,
+  isRoomStale,
+  MAX_ROOM_AGE_MS,
+  GAME_ICONS,
+  PLAYER_ICONS,
+  serializeRoom,
+  deserializeRoom
+} from '../server.js';
 
 async function withServer(fn) {
   const server = createServer();
@@ -800,4 +808,71 @@ test('room data never outlives the 2-week hard cap regardless of activity', () =
     createdAt: now
   };
   assert.strictEqual(isRoomStale(brandNewIdle, now), false);
+});
+
+test('serializeRoom/deserializeRoom round-trip a full room without losing data', () => {
+  const now = Date.now();
+  const room = {
+    players: new Map([
+      ['Ana', { facts: ['likes tea', 'plays guitar'], score: 1, icon: '😀' }],
+      ['Bo', { facts: null, score: 0, icon: '🐶' }] // null facts: post-erasure shape must survive too
+    ]),
+    clients: [{ res: {} }], // must NOT be serialized (not JSON-safe, and per-process anyway)
+    status: 'active',
+    queues: new Map([
+      ['Ana', [{ name: 'Bo', factIndex: 0 }]],
+      ['Bo', [{ name: 'Ana', factIndex: 1 }]]
+    ]),
+    progress: new Map([
+      ['Ana', 0],
+      ['Bo', 1]
+    ]),
+    answerLog: new Map([
+      ['Ana', []],
+      ['Bo', [{ subject: 'Ana', fact: 'plays guitar', guess: 'Ana', correct: true }]]
+    ]),
+    endsAt: now + 60000,
+    timer: setTimeout(() => {}, 1e9), // must NOT be serialized (not JSON-safe)
+    roundSeconds: 180,
+    factsPerPlayer: 2,
+    factsToPlay: null,
+    questionsPerPlayer: 3,
+    musicEnabled: true,
+    hostToken: 'abc123',
+    password: 'secret',
+    icon: '🎉',
+    name: 'Test Room',
+    createdAt: now - 1000,
+    lastActivity: now
+  };
+
+  const serialized = serializeRoom(room);
+  // must be plain-JSON-safe (no Maps, no live sockets/timers) since it's
+  // headed for Firestore
+  const roundTripped = JSON.parse(JSON.stringify(serialized));
+  const restored = deserializeRoom(roundTripped);
+
+  assert.deepStrictEqual([...restored.players.entries()], [...room.players.entries()]);
+  assert.deepStrictEqual([...restored.queues.entries()], [...room.queues.entries()]);
+  assert.deepStrictEqual([...restored.progress.entries()], [...room.progress.entries()]);
+  assert.deepStrictEqual([...restored.answerLog.entries()], [...room.answerLog.entries()]);
+  assert.strictEqual(restored.status, room.status);
+  assert.strictEqual(restored.endsAt, room.endsAt);
+  assert.strictEqual(restored.roundSeconds, room.roundSeconds);
+  assert.strictEqual(restored.factsPerPlayer, room.factsPerPlayer);
+  assert.strictEqual(restored.factsToPlay, room.factsToPlay);
+  assert.strictEqual(restored.questionsPerPlayer, room.questionsPerPlayer);
+  assert.strictEqual(restored.musicEnabled, room.musicEnabled);
+  assert.strictEqual(restored.hostToken, room.hostToken);
+  assert.strictEqual(restored.password, room.password);
+  assert.strictEqual(restored.icon, room.icon);
+  assert.strictEqual(restored.name, room.name);
+  assert.strictEqual(restored.createdAt, room.createdAt);
+  assert.strictEqual(restored.lastActivity, room.lastActivity);
+  // rehydration starts with no live connections/timer — those are re-created
+  // by the request handlers / startup re-arm logic, not by deserialization
+  assert.deepStrictEqual(restored.clients, []);
+  assert.strictEqual(restored.timer, null);
+
+  clearTimeout(room.timer);
 });

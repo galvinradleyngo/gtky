@@ -1,0 +1,12 @@
+node_modules
+.git
+docs
+test
+*.md
+.gitignore
+.dockerignore
+Dockerfile
+firebase.json
+firestore.rules
+.firebaserc
+render.yaml

@@ -42,11 +42,23 @@ Then open `http://localhost:3000` in a browser.
 
 ## Data retention
 
-There's no database — everything lives only in the server's memory while
-it's running, and disappears the moment the process restarts or a free-tier
-instance spins down from inactivity. On top of that, the server automatically
-deletes any room 2 weeks after it was created, whichever comes first, so
-nothing ever outlives that window.
+The server always keeps room state in memory while it's running — that part
+never changes. Whether it *also* survives a restart depends on how it's
+deployed:
+
+- **Render (below), or run locally with `npm start`**: no database. Room
+  state disappears the moment the process restarts or a free-tier instance
+  spins down from inactivity.
+- **Cloud Run + Firestore (below, recommended)**: every change is mirrored
+  to Firestore as a durable backing store. A restart (including a cold
+  start after Cloud Run scales to zero) rehydrates every room — including
+  re-arming an in-progress round's timer — from Firestore before the server
+  starts accepting requests again, so games actually survive restarts.
+
+Either way, the server automatically deletes any room 2 weeks after it was
+created, whichever comes first, so nothing ever outlives that window — and
+whenever a room is deleted (by that cap, the host, or the idle sweep), it's
+removed from Firestore too, not just memory.
 
 Beyond that backstop, participants' fun facts are personal, so they're
 erased from the server immediately when a game ends — win, lose, or the host
@@ -57,11 +69,58 @@ be wiped early too:
 - **Player**: "Remove My Data" on the end-of-game screen removes just that
   player's own name and score.
 
+## Deploying (Cloud Run + Firestore, recommended)
+
+This runs the exact same `server.js` — same validation, same in-memory game
+logic — inside a container on [Cloud Run](https://cloud.google.com/run),
+fronted by Firebase Hosting, with Firestore layered on as a durable backing
+store (see "Data retention" above). Cloud Run's free tier has a much
+shorter cold-start than Render's (typically 1-3s vs 30-50s), and unlike the
+full Firestore-native rewrite this doesn't touch the game's security model
+at all — Firestore is only ever touched by the trusted server via the Admin
+SDK, never directly by a browser.
+
+**One-time setup:**
+1. Create a project at [console.firebase.google.com](https://console.firebase.google.com/)
+   and upgrade it to the **Blaze** (pay-as-you-go) plan — required for
+   Cloud Run/Functions, but normal usage for a game like this stays well
+   within the free monthly quota (you're only billed if you exceed it). Set
+   a small budget alert if you want peace of mind.
+2. Enable **Firestore** (Build → Firestore Database → Create database).
+3. Enable **Hosting** (Build → Hosting → Get started) so a `*.web.app`
+   domain exists.
+4. Edit `.firebaserc` in this repo, replacing the placeholder with your
+   actual Firebase project ID.
+5. Create a Google Cloud **service account** (IAM & Admin → Service Accounts
+   → Create) with these roles: `Cloud Run Admin`, `Cloud Build Editor`,
+   `Artifact Registry Admin`, `Service Account User`, `Firebase Hosting
+   Admin`, `Firebase Rules Admin`, `Cloud Datastore Owner`. Create a JSON
+   key for it and download it.
+6. In this GitHub repo, add two Actions secrets (Settings → Secrets and
+   variables → Actions): `GCP_PROJECT_ID` (your Firebase project ID) and
+   `GCP_SA_KEY` (paste the entire contents of the service account JSON key).
+7. Push to `main` (or run the "Deploy to Cloud Run + Firebase Hosting"
+   workflow manually from the Actions tab). It runs the test suite, then
+   deploys the container to Cloud Run and Hosting/Firestore rules to
+   Firebase — no separate manual deploy step needed.
+
+Once it's live, your game is reachable at both the Cloud Run URL and your
+Firebase Hosting domain (the one that's actually meant to be shared, since
+Hosting is what proxies to Cloud Run per `firebase.json`).
+
+To test the Firestore persistence locally before deploying: run
+`firebase emulators:start --only firestore` in one terminal, then in
+another, `FIRESTORE_ENABLED=1 FIRESTORE_EMULATOR_HOST=localhost:8080 npm start`
+— the Admin SDK talks to the emulator automatically when that env var is
+set, so nothing touches your real Firestore data.
+
 ## Deploying (Render, free tier)
 
-This app keeps game state in memory and pushes live updates over
-Server-Sent Events, so it needs to run as a single always-on process rather
-than a static site or a multi-instance serverless function.
+Render remains a simpler, zero-config alternative if you'd rather not set
+up a Firebase/GCP project (it just won't have real persistence — see "Data
+retention" above). This app keeps game state in memory and pushes live
+updates over Server-Sent Events, so it needs to run as a single always-on
+process rather than a static site or a multi-instance serverless function.
 [Render](https://render.com)'s free web service tier fits that well with no
 code changes:
 
