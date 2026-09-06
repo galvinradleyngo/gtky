@@ -8,9 +8,14 @@ const createCard = document.getElementById('createCard');
 const createForm = document.getElementById('createForm');
 const roomNameInput = document.getElementById('roomName');
 const roomPasswordInput = document.getElementById('roomPassword');
+const gameModeInput = document.getElementById('gameMode');
+const roundSecondsRow = document.getElementById('roundSecondsRow');
 const roundSecondsInput = document.getElementById('roundSeconds');
 const factsPerPlayerInput = document.getElementById('factsPerPlayer');
+const toggleAdvancedBtn = document.getElementById('toggleAdvanced');
+const advancedSettings = document.getElementById('advancedSettings');
 const factsToPlayInput = document.getElementById('factsToPlay');
+const questionsPerPlayerRow = document.getElementById('questionsPerPlayerRow');
 const questionsPerPlayerInput = document.getElementById('questionsPerPlayer');
 const musicEnabledInput = document.getElementById('musicEnabled');
 const roomDiv = document.getElementById('room');
@@ -37,9 +42,14 @@ const editSettingsPanel = document.getElementById('editSettingsPanel');
 const editSettingsForm = document.getElementById('editSettingsForm');
 const editRoomName = document.getElementById('editRoomName');
 const editRoomPassword = document.getElementById('editRoomPassword');
+const editGameMode = document.getElementById('editGameMode');
+const editRoundSecondsRow = document.getElementById('editRoundSecondsRow');
 const editRoundSeconds = document.getElementById('editRoundSeconds');
 const editFactsPerPlayer = document.getElementById('editFactsPerPlayer');
+const editToggleAdvancedBtn = document.getElementById('editToggleAdvanced');
+const editAdvancedSettings = document.getElementById('editAdvancedSettings');
 const editFactsToPlay = document.getElementById('editFactsToPlay');
+const editQuestionsPerPlayerRow = document.getElementById('editQuestionsPerPlayerRow');
 const editQuestionsPerPlayer = document.getElementById('editQuestionsPerPlayer');
 const editMusicEnabled = document.getElementById('editMusicEnabled');
 const cancelEditSettingsBtn = document.getElementById('cancelEditSettings');
@@ -54,6 +64,16 @@ const closeHistoryBtn = document.getElementById('closeHistory');
 const leaderboardPanel = document.getElementById('leaderboardPanel');
 const leaderboardList = document.getElementById('leaderboard');
 const confettiCanvas = document.getElementById('confettiCanvas');
+const livePanel = document.getElementById('livePanel');
+const liveQuestionLabel = document.getElementById('liveQuestionLabel');
+const liveFact = document.getElementById('liveFact');
+const liveProgress = document.getElementById('liveProgress');
+const liveRevealBtn = document.getElementById('liveRevealBtn');
+const liveResults = document.getElementById('liveResults');
+const liveAnswerName = document.getElementById('liveAnswerName');
+const liveTally = document.getElementById('liveTally');
+const liveMiniLeaderboard = document.getElementById('liveMiniLeaderboard');
+const liveNextBtn = document.getElementById('liveNextBtn');
 
 let code = null;
 let hostToken = null;
@@ -67,8 +87,10 @@ let currentRoundSeconds = 180;
 let currentFactsPerPlayer = 1;
 let currentFactsToPlay = null;
 let currentQuestionsPerPlayer = null;
+let currentGameMode = 'self-paced';
 let pendingLeaderboard = [];
 let pendingPodium = [];
+let playerIcons = new Map(); // name -> icon, refreshed on every roster update
 
 // --- session (this tab, this active room) ---
 
@@ -208,6 +230,7 @@ showCreateFormBtn.onclick = () => {
 
 function renderPlayers(players) {
   playersList.innerHTML = '';
+  playerIcons = new Map(players.map(p => [p.name, p.icon]));
   players.forEach(p => {
     const li = document.createElement('li');
     const avatar = document.createElement('span');
@@ -220,8 +243,8 @@ function renderPlayers(players) {
   playerCountEl.textContent = players.length;
 }
 
-function renderLeaderboard(leaderboard) {
-  leaderboardList.innerHTML = '';
+function renderLeaderboard(leaderboard, targetEl = leaderboardList) {
+  targetEl.innerHTML = '';
   leaderboard.forEach(p => {
     const li = document.createElement('li');
     const avatar = document.createElement('span');
@@ -229,7 +252,7 @@ function renderLeaderboard(leaderboard) {
     avatar.textContent = p.icon || '🙂';
     li.appendChild(avatar);
     li.appendChild(document.createTextNode(`${p.name}: ${p.score}`));
-    leaderboardList.appendChild(li);
+    targetEl.appendChild(li);
   });
 }
 
@@ -407,6 +430,30 @@ async function showHistory(name) {
 
 closeHistoryBtn.onclick = () => historyPanel.classList.add('hidden');
 
+// Settings that don't apply to the selected game mode are hidden rather
+// than just shown-and-ignored: live mode has no round timer (the host
+// paces it manually) and no per-player question count (everyone answers
+// the same shared sequence), so showing those knobs would just be
+// confusing clutter for a mode where they do nothing.
+function updateModeVisibility() {
+  const isLive = gameModeInput.value === 'live';
+  roundSecondsRow.classList.toggle('hidden', isLive);
+  questionsPerPlayerRow.classList.toggle('hidden', isLive);
+}
+
+function updateEditModeVisibility() {
+  const isLive = editGameMode.value === 'live';
+  editRoundSecondsRow.classList.toggle('hidden', isLive);
+  editQuestionsPerPlayerRow.classList.toggle('hidden', isLive);
+}
+
+gameModeInput.onchange = updateModeVisibility;
+editGameMode.onchange = updateEditModeVisibility;
+updateModeVisibility();
+
+toggleAdvancedBtn.onclick = () => advancedSettings.classList.toggle('hidden');
+editToggleAdvancedBtn.onclick = () => editAdvancedSettings.classList.toggle('hidden');
+
 function setRoomStatus(status) {
   roomStatus = status;
   editSettingsBtn.classList.toggle('hidden', status !== 'lobby');
@@ -424,7 +471,8 @@ function openRoomPanel({
   roundSeconds,
   factsPerPlayer,
   factsToPlay,
-  questionsPerPlayer
+  questionsPerPlayer,
+  gameMode
 }) {
   code = c;
   musicEnabled = Boolean(me);
@@ -433,6 +481,7 @@ function openRoomPanel({
   currentFactsPerPlayer = factsPerPlayer || 1;
   currentFactsToPlay = factsToPlay || null;
   currentQuestionsPerPlayer = questionsPerPlayer || null;
+  currentGameMode = gameMode || 'self-paced';
   codeSpan.textContent = code;
   if (joinUrl) joinUrlInput.value = joinUrl;
   if (qrCode) qrImg.src = qrCode;
@@ -485,6 +534,7 @@ function enterActiveState(endsAt) {
   leaderboardPanel.classList.add('hidden');
   historyPanel.classList.add('hidden');
   retentionNoticeEl.classList.add('hidden');
+  livePanel.classList.add('hidden');
   progressStatusEl.textContent = '';
   // QR/link and the full name list stop being useful once play starts —
   // collapse them so the timer and controls don't need scrolling to see.
@@ -497,10 +547,69 @@ function enterActiveState(endsAt) {
   }
 }
 
+// Live/Kahoot-style mode has no shared countdown -- the host paces it by
+// hand (Reveal, then Next) -- so this is a distinct entry point from the
+// self-paced enterActiveState rather than a variant of it.
+function enterLiveActiveState() {
+  setRoomStatus('active');
+  startBtn.classList.add('hidden');
+  endBtn.classList.remove('hidden');
+  gameOverPanel.classList.add('hidden');
+  podiumPanel.classList.add('hidden');
+  leaderboardPanel.classList.add('hidden');
+  historyPanel.classList.add('hidden');
+  retentionNoticeEl.classList.add('hidden');
+  timerWrap.classList.add('hidden');
+  joinPanelExtra.classList.add('hidden');
+  playersList.classList.add('hidden');
+  livePanel.classList.remove('hidden');
+  if (musicEnabled) {
+    muteMusicBtn.classList.remove('hidden');
+    if (!musicUserMuted && window.GtkyMusic) window.GtkyMusic.start();
+  }
+}
+
+function renderLiveQuestion(msg) {
+  liveQuestionLabel.textContent = `Question ${msg.questionIndex} of ${msg.totalQuestions}`;
+  liveFact.textContent = msg.fact;
+  liveProgress.textContent = 'Waiting for answers...';
+  liveResults.classList.add('hidden');
+  liveRevealBtn.classList.remove('hidden');
+  livePanel.classList.remove('hidden');
+}
+
+function renderLiveReveal(msg) {
+  liveRevealBtn.classList.add('hidden');
+  liveProgress.textContent = `${msg.answeredCount} player${msg.answeredCount === 1 ? '' : 's'} answered`;
+  const icon = playerIcons.get(msg.subject) || '🙂';
+  liveAnswerName.textContent = `${icon} ${msg.subject}`;
+
+  liveTally.innerHTML = '';
+  const total = Object.values(msg.tally).reduce((a, b) => a + b, 0) || 1;
+  const tallyEntries = Object.entries(msg.tally).sort((a, b) => b[1] - a[1]);
+  tallyEntries.forEach(([name, count]) => {
+    const row = document.createElement('div');
+    row.className = 'live-tally-row';
+    const label = document.createElement('span');
+    label.className = 'live-tally-label';
+    label.textContent = `${playerIcons.get(name) || '🙂'} ${name} (${count})`;
+    const bar = document.createElement('div');
+    bar.className = `live-tally-bar${name === msg.subject ? ' correct' : ''}`;
+    bar.style.width = `${Math.max(6, Math.round((count / total) * 100))}%`;
+    row.appendChild(label);
+    row.appendChild(bar);
+    liveTally.appendChild(row);
+  });
+
+  renderLeaderboard(msg.leaderboard.slice(0, 5), liveMiniLeaderboard);
+  liveResults.classList.remove('hidden');
+}
+
 function enterCompleteState(leaderboard, podium, { immediate = false } = {}) {
   setRoomStatus('complete');
   stopCountdown();
   timerWrap.classList.add('hidden');
+  livePanel.classList.add('hidden');
   startBtn.classList.add('hidden');
   endBtn.classList.add('hidden');
   joinPanelExtra.classList.add('hidden');
@@ -555,6 +664,15 @@ function connectEvents() {
     if (msg.type === 'player-progress') {
       progressStatusEl.textContent = `${msg.completedCount} of ${msg.totalPlayers} players finished`;
     }
+    if (msg.type === 'live-question') {
+      renderLiveQuestion(msg);
+    }
+    if (msg.type === 'live-progress') {
+      liveProgress.textContent = `${msg.answeredCount} of ${msg.totalAnswerers} answered`;
+    }
+    if (msg.type === 'live-reveal') {
+      renderLiveReveal(msg);
+    }
     if (msg.type === 'game-over') {
       enterCompleteState(msg.leaderboard, msg.podium);
     }
@@ -581,6 +699,7 @@ createForm.onsubmit = async e => {
       body: JSON.stringify({
         password: roomPasswordInput.value,
         name: roomNameInput.value,
+        gameMode: gameModeInput.value,
         roundSeconds: roundSecondsInput.value || undefined,
         factsPerPlayer: factsPerPlayerInput.value || undefined,
         factsToPlay: factsToPlayInput.value || undefined,
@@ -633,7 +752,31 @@ startBtn.onclick = async () => {
     alert(data.error);
     return;
   }
-  enterActiveState(data.endsAt);
+  if (data.live) {
+    enterLiveActiveState();
+  } else {
+    enterActiveState(data.endsAt);
+  }
+};
+
+liveRevealBtn.onclick = async () => {
+  const res = await fetch('/live-reveal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, hostToken })
+  });
+  const data = await res.json();
+  if (data.error) alert(data.error);
+};
+
+liveNextBtn.onclick = async () => {
+  const res = await fetch('/live-next', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, hostToken })
+  });
+  const data = await res.json();
+  if (data.error) alert(data.error);
 };
 
 endBtn.onclick = async () => {
@@ -663,11 +806,13 @@ muteMusicBtn.onclick = () => {
 editSettingsBtn.onclick = () => {
   editRoomName.value = currentRoomName;
   editRoomPassword.value = '';
+  editGameMode.value = currentGameMode;
   editRoundSeconds.value = String(currentRoundSeconds);
   editFactsPerPlayer.value = String(currentFactsPerPlayer);
   editFactsToPlay.value = currentFactsToPlay ? String(currentFactsToPlay) : '';
   editQuestionsPerPlayer.value = currentQuestionsPerPlayer ? String(currentQuestionsPerPlayer) : '';
   editMusicEnabled.checked = musicEnabled;
+  updateEditModeVisibility();
   editSettingsPanel.classList.remove('hidden');
   editSettingsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 };
@@ -680,6 +825,7 @@ editSettingsForm.onsubmit = async e => {
     code,
     hostToken,
     name: editRoomName.value,
+    gameMode: editGameMode.value,
     roundSeconds: editRoundSeconds.value,
     factsPerPlayer: editFactsPerPlayer.value || '',
     factsToPlay: editFactsToPlay.value || '',
@@ -759,7 +905,15 @@ async function resumeRoom(roomCode, token) {
     openRoomPanel(state);
     renderPlayers(state.players);
     renderLeaderboard(state.leaderboard);
-    if (state.status === 'active') {
+    if (state.status === 'active' && state.gameMode === 'live') {
+      // Resuming mid-live-game doesn't replay the current question (its
+      // fact/subject aren't exposed by this public endpoint, since players
+      // can call it too) -- the host lands here and picks back up on the
+      // next reveal/next-question broadcast.
+      enterLiveActiveState();
+      liveFact.textContent = 'Reconnected — waiting for the next update...';
+      liveRevealBtn.classList.add('hidden');
+    } else if (state.status === 'active') {
       enterActiveState(state.endsAt);
     } else if (state.status === 'complete') {
       enterCompleteState(state.leaderboard, state.leaderboard.slice(0, 3), { immediate: true });

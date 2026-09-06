@@ -553,6 +553,29 @@ test('each player gets a personalized queue that excludes their own fact', async
   });
 });
 
+test('question options are capped at 4 (subject + up to 3 distractors) even with many players', async () => {
+  await withServer(async base => {
+    const room = await createRoom(base);
+    const names = ['Ana', 'Bo', 'Cy', 'Di', 'Ed', 'Fi'];
+    for (const n of names) await joinRoom(base, room.code, n, `${n} fact`);
+
+    const streams = {};
+    for (const n of names) streams[n] = await openSSE(base, room.code, n);
+    await postJSON(base, '/start', { code: room.code, hostToken: room.hostToken });
+
+    for (const n of names) {
+      const msg = await streams[n].next();
+      assert.strictEqual(msg.type, 'question');
+      assert.ok(msg.options.length <= 4, `expected at most 4 options, got ${msg.options.length}`);
+      const optionNames = msg.options.map(o => o.name);
+      const subjectName = names.find(other => `${other} fact` === msg.fact);
+      assert.ok(optionNames.includes(subjectName), 'the correct subject must always be among the options');
+      assert.strictEqual(new Set(optionNames).size, optionNames.length, 'options must not repeat');
+      streams[n].close();
+    }
+  });
+});
+
 test('answering advances to the next personalized question with instant private feedback', async () => {
   await withServer(async base => {
     const room = await createRoom(base);
@@ -875,4 +898,152 @@ test('serializeRoom/deserializeRoom round-trip a full room without losing data',
   assert.strictEqual(restored.timer, null);
 
   clearTimeout(room.timer);
+});
+
+test('gameMode defaults to self-paced and is validated', async () => {
+  await withServer(async base => {
+    const bad = await postJSON(base, '/create-room', { gameMode: 'bogus' });
+    assert.strictEqual(bad.status, 400);
+
+    const defaultRoom = await createRoom(base);
+    assert.strictEqual(defaultRoom.gameMode, 'self-paced');
+
+    const liveRoom = await createRoom(base, { gameMode: 'live' });
+    assert.strictEqual(liveRoom.gameMode, 'live');
+  });
+});
+
+test('live mode: host-paced shared question sequence with correct per-recipient visibility', async () => {
+  await withServer(async base => {
+    const room = await createRoom(base, { gameMode: 'live' });
+    const names = ['Ana', 'Bo', 'Cy'];
+    for (const n of names) await joinRoom(base, room.code, n, `${n} fact`);
+
+    const streams = {};
+    for (const n of names) streams[n] = await openSSE(base, room.code, n);
+    const hostStream = await openSSE(base, room.code, null);
+
+    const startRes = await postJSON(base, '/start', { code: room.code, hostToken: room.hostToken });
+    const startBody = await startRes.json();
+    assert.strictEqual(startRes.status, 200);
+    assert.strictEqual(startBody.live, true);
+
+    const hostMsg = await hostStream.next();
+    assert.strictEqual(hostMsg.type, 'live-question');
+    assert.ok(names.includes(hostMsg.subject), 'host learns the subject to run the reveal');
+    const subject = hostMsg.subject;
+
+    const guessers = names.filter(n => n !== subject);
+    let subjectMsg, guesserMsgs = {};
+    for (const n of names) {
+      const msg = await streams[n].next();
+      assert.strictEqual(msg.type, 'live-question');
+      if (n === subject) {
+        subjectMsg = msg;
+      } else {
+        guesserMsgs[n] = msg;
+      }
+    }
+    assert.strictEqual(subjectMsg.isSubject, true);
+    assert.strictEqual(subjectMsg.subject, undefined, "the subject's own client must not see a 'subject' field either — isSubject is enough");
+    for (const n of guessers) {
+      assert.strictEqual(guesserMsgs[n].subject, undefined, 'guessers must never receive who the subject is before answering');
+      assert.ok(guesserMsgs[n].options.some(o => o.name === subject), 'the real subject must be among the options');
+    }
+
+    // the subject can't answer their own question
+    const subjectTriesToAnswer = await postJSON(base, '/live-answer', {
+      code: room.code,
+      name: subject,
+      guess: guessers[0]
+    });
+    assert.strictEqual(subjectTriesToAnswer.status, 400);
+
+    // a guesser answers correctly
+    const correctGuesser = guessers[0];
+    const ans1 = await postJSON(base, '/live-answer', { code: room.code, name: correctGuesser, guess: subject });
+    const ans1Body = await ans1.json();
+    assert.strictEqual(ans1.status, 200);
+    assert.strictEqual(ans1Body.correct, true);
+    assert.strictEqual(ans1Body.answer, subject);
+
+    // can't answer twice
+    const dupe = await postJSON(base, '/live-answer', { code: room.code, name: correctGuesser, guess: subject });
+    assert.strictEqual(dupe.status, 400);
+
+    const progressMsg = await hostStream.next();
+    assert.strictEqual(progressMsg.type, 'live-progress');
+    assert.strictEqual(progressMsg.answeredCount, 1);
+    assert.strictEqual(progressMsg.totalAnswerers, 2); // 3 players minus the subject
+
+    // second guesser answers incorrectly (guesses themselves, always wrong)
+    const otherGuesser = guessers[1];
+    const ans2 = await postJSON(base, '/live-answer', { code: room.code, name: otherGuesser, guess: otherGuesser });
+    const ans2Body = await ans2.json();
+    assert.strictEqual(ans2Body.correct, false);
+
+    // host reveals
+    const revealRes = await postJSON(base, '/live-reveal', { code: room.code, hostToken: room.hostToken });
+    assert.strictEqual(revealRes.status, 200);
+
+    let revealMsg = await hostStream.next();
+    while (revealMsg.type === 'live-progress') revealMsg = await hostStream.next();
+    assert.strictEqual(revealMsg.type, 'live-reveal');
+    assert.strictEqual(revealMsg.subject, subject);
+    assert.strictEqual(revealMsg.tally[subject], 1);
+    assert.strictEqual(revealMsg.tally[otherGuesser], 1);
+    assert.strictEqual(revealMsg.answeredCount, 2);
+    assert.ok(revealMsg.leaderboard.find(p => p.name === correctGuesser).score >= 1);
+
+    // can't answer once revealed
+    const tooLate = await postJSON(base, '/live-answer', { code: room.code, name: otherGuesser, guess: subject });
+    assert.strictEqual(tooLate.status, 400);
+
+    // 3 players, 1 fact each -> 3 total questions. We're parked at index 0
+    // in 'reveal' state, so it takes 3 more /live-next calls to exhaust the
+    // queue (0->1, 1->2, 2->3-finished), with a reveal before each advance.
+    const totalQuestions = 3;
+    for (let i = 0; i < totalQuestions; i++) {
+      const nextRes = await postJSON(base, '/live-next', { code: room.code, hostToken: room.hostToken });
+      const nextBody = await nextRes.json();
+      assert.strictEqual(nextRes.status, 200);
+      if (i < totalQuestions - 1) {
+        assert.strictEqual(nextBody.finished, false);
+        await postJSON(base, '/live-reveal', { code: room.code, hostToken: room.hostToken });
+      } else {
+        assert.strictEqual(nextBody.finished, true);
+      }
+    }
+
+    let finalMsg = null;
+    for (let i = 0; i < 10 && !finalMsg; i++) {
+      const msg = await hostStream.next();
+      if (msg && msg.type === 'game-over') finalMsg = msg;
+    }
+    assert.ok(finalMsg, 'expected a game-over broadcast once the shared question queue is exhausted');
+
+    for (const n of names) streams[n].close();
+    hostStream.close();
+  });
+});
+
+test('live mode: /live-reveal and /live-next require the host token and correct liveState', async () => {
+  await withServer(async base => {
+    const room = await createRoom(base, { gameMode: 'live' });
+    await joinRoom(base, room.code, 'Ana', 'a');
+    await joinRoom(base, room.code, 'Bo', 'b');
+    await postJSON(base, '/start', { code: room.code, hostToken: room.hostToken });
+
+    const badToken = await postJSON(base, '/live-reveal', { code: room.code, hostToken: 'nope' });
+    assert.strictEqual(badToken.status, 403);
+
+    const tooEarly = await postJSON(base, '/live-next', { code: room.code, hostToken: room.hostToken });
+    assert.strictEqual(tooEarly.status, 400);
+
+    const okReveal = await postJSON(base, '/live-reveal', { code: room.code, hostToken: room.hostToken });
+    assert.strictEqual(okReveal.status, 200);
+
+    const dupeReveal = await postJSON(base, '/live-reveal', { code: room.code, hostToken: room.hostToken });
+    assert.strictEqual(dupeReveal.status, 400);
+  });
 });

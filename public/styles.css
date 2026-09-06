@@ -604,3 +604,63 @@ ul li {
     opacity: 1;
   }
 }
+
+.live-fact {
+  font-size: clamp(1.3rem, 5vw, 1.8rem);
+  text-align: center;
+  margin: 16px 0;
+}
+
+.live-answer-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 1.4rem;
+  text-align: center;
+  margin: 4px 0 14px;
+}
+
+.own-score {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: var(--purple);
+  text-align: center;
+  margin: 0 0 10px;
+}
+
+.live-tally {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.live-tally-row {
+  position: relative;
+  background: #f6f5ff;
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 30px;
+}
+
+.live-tally-label {
+  position: relative;
+  z-index: 1;
+  display: block;
+  padding: 6px 10px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.live-tally-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: #d6d0fb;
+  transition: width 0.4s ease;
+}
+
+.live-tally-bar.correct {
+  background: #bdf0cf;
+}
