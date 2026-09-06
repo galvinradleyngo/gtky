@@ -62,6 +62,7 @@ export function serializeRoom(room) {
     factsPerPlayer: room.factsPerPlayer,
     factsToPlay: room.factsToPlay,
     questionsPerPlayer: room.questionsPerPlayer,
+    gameMode: room.gameMode,
     musicEnabled: room.musicEnabled,
     hostToken: room.hostToken,
     password: room.password,
@@ -72,7 +73,12 @@ export function serializeRoom(room) {
     players: Object.fromEntries(room.players),
     queues: Object.fromEntries(room.queues),
     progress: Object.fromEntries(room.progress),
-    answerLog: Object.fromEntries(room.answerLog)
+    answerLog: Object.fromEntries(room.answerLog),
+    pool: room.pool || [],
+    liveQueue: room.liveQueue || [],
+    liveIndex: room.liveIndex || 0,
+    liveState: room.liveState || null,
+    liveAnswers: Object.fromEntries(room.liveAnswers || new Map())
   };
 }
 
@@ -84,12 +90,18 @@ export function deserializeRoom(data) {
     queues: new Map(Object.entries(data.queues || {})),
     progress: new Map(Object.entries(data.progress || {})),
     answerLog: new Map(Object.entries(data.answerLog || {})),
+    pool: data.pool || [],
     endsAt: data.endsAt,
     timer: null,
     roundSeconds: data.roundSeconds,
     factsPerPlayer: data.factsPerPlayer,
     factsToPlay: data.factsToPlay,
     questionsPerPlayer: data.questionsPerPlayer,
+    gameMode: data.gameMode || DEFAULT_GAME_MODE,
+    liveQueue: data.liveQueue || [],
+    liveIndex: data.liveIndex || 0,
+    liveState: data.liveState || null,
+    liveAnswers: new Map(Object.entries(data.liveAnswers || {})),
     musicEnabled: data.musicEnabled,
     hostToken: data.hostToken,
     password: data.password,
@@ -289,6 +301,42 @@ function rosterList(room) {
   return [...room.players.entries()].map(([name, p]) => ({ name, icon: p.icon }));
 }
 
+const MAX_OPTIONS = 4;
+
+// Real multiple-choice, not "scroll through every player in the room" --
+// the correct subject plus up to 3 random distractors drawn from the same
+// featured pool, shuffled. Caps the choice list at a size that stays a
+// snap decision on a phone screen regardless of how many people joined.
+function buildQuestionOptions(room, pool, subjectName) {
+  const distractPool = pool.filter(n => n !== subjectName);
+  const distractors = shuffle(distractPool).slice(0, Math.min(MAX_OPTIONS - 1, distractPool.length));
+  const names = shuffle([subjectName, ...distractors]);
+  return names.map(n => ({ name: n, icon: room.players.get(n).icon }));
+}
+
+// Broadcasts the current live-mode question with different visibility per
+// recipient: the host and the subject both learn who it's about (the host
+// needs it to run the reveal; the subject needs it to know to sit this one
+// out), but guessers only ever get the fact + their multiple-choice
+// options -- never the answer they're supposed to be guessing.
+function broadcastLiveQuestion(room, code) {
+  const current = room.liveQueue[room.liveIndex];
+  const fact = room.players.get(current.name).facts[current.factIndex];
+  const options = buildQuestionOptions(room, room.pool, current.name);
+  const questionIndex = room.liveIndex + 1;
+  const totalQuestions = room.liveQueue.length;
+  const musicEnabled = room.musicEnabled;
+  broadcastEach(code, client => {
+    if (client.name === null) {
+      return { type: 'live-question', fact, subject: current.name, questionIndex, totalQuestions, musicEnabled };
+    }
+    if (client.name === current.name) {
+      return { type: 'live-question', fact, isSubject: true, questionIndex, totalQuestions, musicEnabled };
+    }
+    return { type: 'live-question', fact, options, questionIndex, totalQuestions, musicEnabled };
+  });
+}
+
 function erasePersonalData(room) {
   // Participants' fun facts are personal data; wipe them the moment the game
   // ends instead of waiting for the room's 2-week retention cap or a manual
@@ -371,6 +419,17 @@ function validateQuestionsPerPlayer(value) {
   return { ok: true, value: n };
 }
 
+const GAME_MODES = ['self-paced', 'live'];
+const DEFAULT_GAME_MODE = 'self-paced';
+
+function validateGameMode(value) {
+  if (value === undefined || value === null || value === '') return { ok: true, value: undefined };
+  if (!GAME_MODES.includes(value)) {
+    return { ok: false, error: `gameMode must be one of: ${GAME_MODES.join(', ')}` };
+  }
+  return { ok: true, value };
+}
+
 function joinUrlFor(req, code) {
   const proto = req.headers['x-forwarded-proto'] || 'http';
   return `${proto}://${req.headers.host}/j/${code}`;
@@ -412,6 +471,10 @@ function handleAPI(req, res) {
       if (!questionsPerPlayerCheck.ok) return send(res, 400, { error: questionsPerPlayerCheck.error });
       const questionsPerPlayer = questionsPerPlayerCheck.value;
 
+      const gameModeCheck = validateGameMode(body.gameMode);
+      if (!gameModeCheck.ok) return send(res, 400, { error: gameModeCheck.error });
+      const gameMode = gameModeCheck.value ?? DEFAULT_GAME_MODE;
+
       const musicEnabled = Boolean(body.musicEnabled);
 
       const code = generateCode();
@@ -424,12 +487,18 @@ function handleAPI(req, res) {
         queues: new Map(),
         progress: new Map(),
         answerLog: new Map(),
+        pool: [],
         endsAt: null,
         timer: null,
         roundSeconds,
         factsPerPlayer,
         factsToPlay,
         questionsPerPlayer,
+        gameMode,
+        liveQueue: [],
+        liveIndex: 0,
+        liveState: null,
+        liveAnswers: new Map(),
         musicEnabled,
         hostToken,
         password,
@@ -449,6 +518,7 @@ function handleAPI(req, res) {
         factsPerPlayer,
         factsToPlay,
         questionsPerPlayer,
+        gameMode,
         musicEnabled,
         passwordProtected: password.length > 0
       });
@@ -499,6 +569,11 @@ function handleAPI(req, res) {
         if (!check.ok) return send(res, 400, { error: check.error });
         room.questionsPerPlayer = check.value;
       }
+      if (body.gameMode !== undefined) {
+        const check = validateGameMode(body.gameMode);
+        if (!check.ok) return send(res, 400, { error: check.error });
+        room.gameMode = check.value ?? DEFAULT_GAME_MODE;
+      }
       if (body.musicEnabled !== undefined) {
         room.musicEnabled = Boolean(body.musicEnabled);
       }
@@ -511,6 +586,7 @@ function handleAPI(req, res) {
         factsPerPlayer: room.factsPerPlayer,
         factsToPlay: room.factsToPlay,
         questionsPerPlayer: room.questionsPerPlayer,
+        gameMode: room.gameMode,
         musicEnabled: room.musicEnabled,
         passwordProtected: Boolean(room.password),
         icon: room.icon
@@ -633,6 +709,7 @@ function handleAPI(req, res) {
         factsPerPlayer: room.factsPerPlayer,
         factsToPlay: room.factsToPlay,
         questionsPerPlayer: room.questionsPerPlayer,
+        gameMode: room.gameMode,
         musicEnabled: room.musicEnabled,
         icon: room.icon,
         roomName: room.name,
@@ -705,26 +782,47 @@ function handleAPI(req, res) {
         return send(res, 400, { error: 'need at least 2 players who have submitted their facts to start' });
       }
 
-      // Three independent settings shape the round:
+      // Two independent settings shape which facts are in play:
       // - "Facts to play" is a shared pool: only these players are ever
       //   asked about at all.
       // - "Facts per player" is how many facts each player submitted when
       //   joining (their personal blank count).
-      // - "Questions per player" is how many questions each guesser
-      //   answers. By default that's exactly one per other featured
-      //   player (one of their facts, picked at random) regardless of how
-      //   many facts they submitted; the host can raise it to draw more
-      //   questions from the full shared pool of individual facts.
       const poolSize = room.factsToPlay ? Math.min(room.factsToPlay, names.length) : names.length;
       const pool = poolSize < names.length ? shuffle(names).slice(0, poolSize) : names;
+      room.pool = pool;
       const subjectPool = [];
       for (const n of pool) {
         room.players.get(n).facts.forEach((_, factIndex) => subjectPool.push({ name: n, factIndex }));
       }
 
+      room.answerLog = new Map();
+      for (const n of names) room.answerLog.set(n, []);
+      room.status = 'active';
+
+      if (room.gameMode === 'live') {
+        // One shared question sequence for the whole room, host-paced --
+        // no per-player queues and no round timer (the host advances
+        // manually via /live-reveal then /live-next, Kahoot-style).
+        room.liveQueue = shuffle(subjectPool);
+        room.liveIndex = 0;
+        room.liveState = 'question';
+        room.liveAnswers = new Map();
+        room.queues = new Map();
+        room.progress = new Map();
+        await touchRoom(code, room);
+
+        broadcastLiveQuestion(room, code);
+        send(res, 200, { ok: true, live: true });
+        return;
+      }
+
+      // "Questions per player" only applies to self-paced play. By
+      // default that's exactly one question per other featured player
+      // (one of their facts, picked at random) regardless of how many
+      // facts they submitted; the host can raise it to draw more
+      // questions from the full shared pool of individual facts.
       room.queues = new Map();
       room.progress = new Map();
-      room.answerLog = new Map();
       for (const n of names) {
         let queue;
         if (room.questionsPerPlayer) {
@@ -742,9 +840,7 @@ function handleAPI(req, res) {
         }
         room.queues.set(n, queue);
         room.progress.set(n, 0);
-        room.answerLog.set(n, []);
       }
-      room.status = 'active';
       room.endsAt = Date.now() + room.roundSeconds * 1000;
       await touchRoom(code, room);
 
@@ -761,7 +857,7 @@ function handleAPI(req, res) {
         return {
           type: 'question',
           fact: room.players.get(first.name).facts[first.factIndex],
-          options: rosterList(room),
+          options: buildQuestionOptions(room, pool, first.name),
           questionIndex: 1,
           totalQuestions: queue.length,
           endsAt: room.endsAt,
@@ -836,11 +932,121 @@ function handleAPI(req, res) {
           finished: false,
           next: {
             fact: room.players.get(nextSubject.name).facts[nextSubject.factIndex],
+            options: buildQuestionOptions(room, room.pool, nextSubject.name),
             questionIndex: idx + 2,
             totalQuestions: queue.length
           }
         });
       }
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/live-answer') {
+    parseBody(req, async (err, body) => {
+      if (err) return send(res, 400, { error: 'invalid request body' });
+      const code = String(body.code || '').toUpperCase();
+      const name = String(body.name || '');
+      const guess = String(body.guess || '');
+      const room = rooms.get(code);
+      if (!room) return send(res, 404, { error: 'room not found' });
+      if (room.gameMode !== 'live') return send(res, 400, { error: 'this room is not in live mode' });
+      if (room.status !== 'active' || room.liveState !== 'question') {
+        return send(res, 400, { error: 'no question is open for answers right now' });
+      }
+      if (!room.players.has(name)) return send(res, 400, { error: 'unknown player' });
+      if (!room.players.has(guess)) return send(res, 400, { error: 'invalid option' });
+
+      const current = room.liveQueue[room.liveIndex];
+      if (name === current.name) {
+        return send(res, 400, { error: "this one's about you — sit this question out" });
+      }
+      if (room.liveAnswers.has(name)) {
+        return send(res, 400, { error: 'you already answered this question' });
+      }
+
+      const correct = guess === current.name;
+      if (correct) room.players.get(name).score += 1;
+      room.liveAnswers.set(name, { guess, correct });
+      const log = room.answerLog.get(name);
+      if (log) {
+        log.push({
+          subject: current.name,
+          fact: room.players.get(current.name).facts[current.factIndex],
+          guess,
+          correct
+        });
+      }
+      await touchRoom(code, room);
+
+      broadcastAll(code, {
+        type: 'live-progress',
+        answeredCount: room.liveAnswers.size,
+        totalAnswerers: Math.max(room.players.size - 1, 0)
+      });
+
+      send(res, 200, { correct, answer: current.name });
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/live-reveal') {
+    parseBody(req, async (err, body) => {
+      if (err) return send(res, 400, { error: 'invalid request body' });
+      const code = String(body.code || '').toUpperCase();
+      const room = rooms.get(code);
+      if (!room) return send(res, 404, { error: 'room not found' });
+      if (room.hostToken !== body.hostToken) return send(res, 403, { error: 'not authorized' });
+      if (room.gameMode !== 'live') return send(res, 400, { error: 'this room is not in live mode' });
+      if (room.status !== 'active' || room.liveState !== 'question') {
+        return send(res, 400, { error: 'no question is currently open' });
+      }
+
+      const current = room.liveQueue[room.liveIndex];
+      room.liveState = 'reveal';
+      const tally = {};
+      for (const { guess } of room.liveAnswers.values()) {
+        tally[guess] = (tally[guess] || 0) + 1;
+      }
+      await touchRoom(code, room);
+
+      broadcastAll(code, {
+        type: 'live-reveal',
+        subject: current.name,
+        fact: room.players.get(current.name).facts[current.factIndex],
+        tally,
+        answeredCount: room.liveAnswers.size,
+        leaderboard: getLeaderboard(room)
+      });
+      send(res, 200, { ok: true });
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && req.url === '/live-next') {
+    parseBody(req, async (err, body) => {
+      if (err) return send(res, 400, { error: 'invalid request body' });
+      const code = String(body.code || '').toUpperCase();
+      const room = rooms.get(code);
+      if (!room) return send(res, 404, { error: 'room not found' });
+      if (room.hostToken !== body.hostToken) return send(res, 403, { error: 'not authorized' });
+      if (room.gameMode !== 'live') return send(res, 400, { error: 'this room is not in live mode' });
+      if (room.status !== 'active' || room.liveState !== 'reveal') {
+        return send(res, 400, { error: 'reveal the current question before advancing' });
+      }
+
+      room.liveIndex += 1;
+      if (room.liveIndex >= room.liveQueue.length) {
+        await finalizeGame(room, code);
+        send(res, 200, { ok: true, finished: true });
+        return;
+      }
+
+      room.liveState = 'question';
+      room.liveAnswers = new Map();
+      await touchRoom(code, room);
+      broadcastLiveQuestion(room, code);
+      send(res, 200, { ok: true, finished: false });
     });
     return;
   }
@@ -918,6 +1124,9 @@ function requestListener(req, res) {
     pathname.startsWith('/events') ||
     pathname.startsWith('/start') ||
     pathname.startsWith('/answer') ||
+    pathname.startsWith('/live-answer') ||
+    pathname.startsWith('/live-reveal') ||
+    pathname.startsWith('/live-next') ||
     pathname.startsWith('/end') ||
     pathname.startsWith('/delete-room') ||
     pathname.startsWith('/remove-me')

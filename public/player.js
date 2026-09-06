@@ -29,6 +29,11 @@ const questionEl = document.getElementById('question');
 const optionsEl = document.getElementById('options');
 const statusEl = document.getElementById('status');
 const finishedNoticeEl = document.getElementById('finishedNotice');
+const liveSubjectNotice = document.getElementById('liveSubjectNotice');
+const liveWaitingNotice = document.getElementById('liveWaitingNotice');
+const liveRevealSummary = document.getElementById('liveRevealSummary');
+const liveRevealAnswer = document.getElementById('liveRevealAnswer');
+const ownScoreEl = document.getElementById('ownScore');
 const finalPanel = document.getElementById('finalPanel');
 const removeMeBtn = document.getElementById('removeMe');
 const removeStatusEl = document.getElementById('removeStatus');
@@ -84,10 +89,21 @@ function startCountdown(endsAt) {
   const tick = () => {
     const remaining = endsAt - Date.now();
     timerEl.textContent = formatRemaining(remaining);
+    timerEl.classList.toggle('low-time', remaining > 0 && remaining <= 10000);
     if (remaining <= 0) stopCountdown();
   };
   tick();
   countdownTimer = setInterval(tick, 250);
+}
+
+function setStatus(text, kind) {
+  statusEl.textContent = text;
+  statusEl.classList.remove('status-correct', 'status-wrong');
+  if (kind) {
+    // restart the animation even if the same kind fires twice in a row
+    void statusEl.offsetWidth;
+    statusEl.classList.add(kind);
+  }
 }
 
 function stopCountdown() {
@@ -252,6 +268,66 @@ function renderQuestion(fact, questionIndex, totalQuestions) {
   });
 }
 
+function renderLiveQuestion(msg) {
+  hasAnswered = false;
+  waitingEl.classList.add('hidden');
+  finishedNoticeEl.classList.add('hidden');
+  liveWaitingNotice.classList.add('hidden');
+  liveRevealSummary.classList.add('hidden');
+  statusEl.textContent = '';
+  questionLabelEl.textContent = `Question ${msg.questionIndex} of ${msg.totalQuestions}`;
+  questionLabelEl.classList.remove('hidden');
+
+  if (msg.isSubject) {
+    liveSubjectNotice.classList.remove('hidden');
+    questionEl.classList.add('hidden');
+    optionsEl.innerHTML = '';
+    return;
+  }
+  liveSubjectNotice.classList.add('hidden');
+  questionEl.textContent = msg.fact;
+  questionEl.classList.remove('hidden');
+  optionsEl.innerHTML = '';
+  msg.options.forEach(opt => {
+    const btn = document.createElement('button');
+    const avatar = document.createElement('span');
+    avatar.className = 'player-avatar';
+    avatar.textContent = opt.icon || '🙂';
+    btn.appendChild(avatar);
+    btn.appendChild(document.createTextNode(opt.name));
+    btn.onclick = () => liveAnswer(opt.name);
+    optionsEl.appendChild(btn);
+  });
+}
+
+async function liveAnswer(guess) {
+  if (hasAnswered) return;
+  hasAnswered = true;
+  setOptionsDisabled(true);
+  try {
+    const res = await fetch('/live-answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, name, guess })
+    });
+    const data = await res.json();
+    if (data.error) {
+      statusEl.textContent = data.error;
+      hasAnswered = false;
+      setOptionsDisabled(false);
+      return;
+    }
+    setStatus(data.correct ? 'Correct!' : `Not quite — it was ${data.answer}.`, data.correct ? 'status-correct' : 'status-wrong');
+    questionEl.classList.add('hidden');
+    optionsEl.innerHTML = '';
+    liveWaitingNotice.classList.remove('hidden');
+  } catch {
+    statusEl.textContent = 'Network error submitting your answer.';
+    hasAnswered = false;
+    setOptionsDisabled(false);
+  }
+}
+
 function connectEvents() {
   source = new EventSource(`/events?code=${code}&name=${encodeURIComponent(name)}`);
   source.onmessage = e => {
@@ -268,6 +344,26 @@ function connectEvents() {
       renderQuestion(msg.fact, msg.questionIndex, msg.totalQuestions);
     }
 
+    if (msg.type === 'live-question') {
+      musicEnabled = Boolean(msg.musicEnabled);
+      if (musicEnabled) {
+        muteMusicBtn.classList.remove('hidden');
+        if (!musicUserMuted && window.GtkyMusic) window.GtkyMusic.start();
+      }
+      renderLiveQuestion(msg);
+    }
+
+    if (msg.type === 'live-reveal') {
+      liveWaitingNotice.classList.add('hidden');
+      liveSubjectNotice.classList.add('hidden');
+      questionLabelEl.classList.add('hidden');
+      questionEl.classList.add('hidden');
+      optionsEl.innerHTML = '';
+      const subjectEntry = msg.leaderboard.find(p => p.name === msg.subject);
+      liveRevealAnswer.textContent = `${(subjectEntry && subjectEntry.icon) || '🙂'} ${msg.subject}`;
+      liveRevealSummary.classList.remove('hidden');
+    }
+
     if (msg.type === 'game-over') {
       stopCountdown();
       timerWrap.classList.add('hidden');
@@ -276,8 +372,16 @@ function connectEvents() {
       questionLabelEl.classList.add('hidden');
       questionEl.classList.add('hidden');
       finishedNoticeEl.classList.add('hidden');
+      liveSubjectNotice.classList.add('hidden');
+      liveWaitingNotice.classList.add('hidden');
+      liveRevealSummary.classList.add('hidden');
       optionsEl.innerHTML = '';
       statusEl.textContent = 'The game has ended.';
+      const ownEntry = msg.leaderboard.find(p => p.name === name);
+      if (ownEntry) {
+        ownScoreEl.textContent = `Your score: ${ownEntry.score} point${ownEntry.score === 1 ? '' : 's'}`;
+        ownScoreEl.classList.remove('hidden');
+      }
       removeMeBtn.disabled = false;
       removeMeBtn.classList.remove('hidden');
       removeStatusEl.classList.add('hidden');
@@ -292,6 +396,9 @@ function connectEvents() {
       questionLabelEl.classList.add('hidden');
       optionsEl.innerHTML = '';
       finishedNoticeEl.classList.add('hidden');
+      liveSubjectNotice.classList.add('hidden');
+      liveWaitingNotice.classList.add('hidden');
+      liveRevealSummary.classList.add('hidden');
       waitingEl.classList.add('hidden');
       finalPanel.classList.add('hidden');
       statusEl.textContent = "This game's data has been deleted.";
@@ -352,7 +459,7 @@ async function answer(guess) {
       setOptionsDisabled(false);
       return;
     }
-    statusEl.textContent = data.correct ? 'Correct!' : `Not quite — it was ${data.answer}.`;
+    setStatus(data.correct ? 'Correct!' : `Not quite — it was ${data.answer}.`, data.correct ? 'status-correct' : 'status-wrong');
 
     setTimeout(() => {
       if (data.finished) {
@@ -362,6 +469,7 @@ async function answer(guess) {
         statusEl.textContent = '';
         finishedNoticeEl.classList.remove('hidden');
       } else if (data.next) {
+        cachedOptions = data.next.options;
         renderQuestion(data.next.fact, data.next.questionIndex, data.next.totalQuestions);
       }
     }, 1200);

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Join - GTKY</title>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Press+Start+2P&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -61,10 +61,17 @@
         <div id="options"></div>
         <p id="status"></p>
         <p id="finishedNotice" class="hint hidden">You've answered every question! Hang tight while everyone else finishes (or the timer runs out).</p>
+        <p id="liveSubjectNotice" class="hint hidden">🎉 This one's about you! Sit back and watch the big screen.</p>
+        <p id="liveWaitingNotice" class="hint hidden">Answer submitted! Waiting for the host to reveal the answer...</p>
+        <div id="liveRevealSummary" class="hidden">
+          <p class="hint">The correct answer was:</p>
+          <p id="liveRevealAnswer" class="live-answer-name"></p>
+        </div>
       </div>
 
       <div id="finalPanel" class="card hidden">
         <h2>Game Over!</h2>
+        <p id="ownScore" class="own-score hidden"></p>
         <p class="hint">Look up at the host's screen for the final leaderboard and podium.</p>
         <p class="hint">Your data will be deleted automatically within 2 weeks. Want it gone sooner?</p>
         <button id="removeMe" type="button" class="danger">Remove My Data</button>

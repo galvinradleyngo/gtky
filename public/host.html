@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Host - GTKY</title>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Press+Start+2P&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -23,14 +23,24 @@
       <form id="createForm">
         <input type="text" id="roomName" placeholder="Room Name (optional)" maxlength="60" />
         <input type="password" id="roomPassword" placeholder="Password (optional, for you to edit/reopen later)" maxlength="60" />
-        <label class="hint" for="roundSeconds" style="text-align: left; margin-bottom: -4px;">Round timer</label>
-        <select id="roundSeconds">
-          <option value="60">1 minute</option>
-          <option value="120">2 minutes</option>
-          <option value="180" selected>3 minutes</option>
-          <option value="300">5 minutes</option>
-          <option value="600">10 minutes</option>
+
+        <label class="hint" for="gameMode" style="text-align: left; margin-bottom: -4px;">Game mode</label>
+        <select id="gameMode">
+          <option value="self-paced" selected>Self-Paced &mdash; everyone plays at their own speed</option>
+          <option value="live">Live / Kahoot-Style &mdash; you control a shared big screen</option>
         </select>
+
+        <div id="roundSecondsRow">
+          <label class="hint" for="roundSeconds" style="text-align: left; margin-bottom: -4px;">Round timer</label>
+          <select id="roundSeconds">
+            <option value="60">1 minute</option>
+            <option value="120">2 minutes</option>
+            <option value="180" selected>3 minutes</option>
+            <option value="300">5 minutes</option>
+            <option value="600">10 minutes</option>
+          </select>
+        </div>
+
         <label class="hint" for="factsPerPlayer" style="text-align: left; margin-bottom: -4px;">Facts each player enters about themselves</label>
         <select id="factsPerPlayer">
           <option value="1">1 fact (default)</option>
@@ -38,25 +48,33 @@
           <option value="3">3 facts</option>
           <option value="5">5 facts</option>
         </select>
-        <label class="hint" for="factsToPlay" style="text-align: left; margin-bottom: -4px;">Number of players featured (shared pool)</label>
-        <select id="factsToPlay">
-          <option value="">All players (default)</option>
-          <option value="2">2 players</option>
-          <option value="3">3 players</option>
-          <option value="5">5 players</option>
-          <option value="10">10 players</option>
-        </select>
-        <label class="hint" for="questionsPerPlayer" style="text-align: left; margin-bottom: -4px;">Questions each player is quizzed on</label>
-        <select id="questionsPerPlayer">
-          <option value="">One per other player (default)</option>
-          <option value="3">3 questions</option>
-          <option value="5">5 questions</option>
-          <option value="10">10 questions</option>
-        </select>
+
         <label class="hint" style="text-align: left; display: flex; align-items: center; gap: 8px; margin: 4px 0 -4px;">
           <input type="checkbox" id="musicEnabled" style="width: auto;" />
           🎵 Play background music during the round
         </label>
+
+        <button id="toggleAdvanced" type="button" class="secondary" style="margin-top: 4px;">Advanced settings &#9662;</button>
+        <div id="advancedSettings" class="hidden">
+          <label class="hint" for="factsToPlay" style="text-align: left; margin-bottom: -4px;">Number of players featured (shared pool)</label>
+          <select id="factsToPlay">
+            <option value="">All players (default)</option>
+            <option value="2">2 players</option>
+            <option value="3">3 players</option>
+            <option value="5">5 players</option>
+            <option value="10">10 players</option>
+          </select>
+          <div id="questionsPerPlayerRow">
+            <label class="hint" for="questionsPerPlayer" style="text-align: left; margin-bottom: -4px;">Questions each player is quizzed on</label>
+            <select id="questionsPerPlayer">
+              <option value="">One per other player (default)</option>
+              <option value="3">3 questions</option>
+              <option value="5">5 questions</option>
+              <option value="10">10 questions</option>
+            </select>
+          </div>
+        </div>
+
         <button type="submit" class="primary">Create Room</button>
       </form>
       <p class="hint" style="margin-top: 10px;">Data note: players' fun facts are erased the moment this game ends. Names, scores, and the room itself are deleted automatically no later than 2 weeks after creation &mdash; often much sooner (e.g. when the server restarts, the room sits idle, or you delete it yourself below).</p>
@@ -101,19 +119,45 @@
         <p id="retentionNotice" class="hint hidden"></p>
       </section>
 
+      <section id="livePanel" class="card hidden">
+        <p id="liveQuestionLabel" class="hint"></p>
+        <h2 id="liveFact" class="live-fact"></h2>
+        <p id="liveProgress" class="hint"></p>
+        <button id="liveRevealBtn" type="button" class="primary">Reveal Answer</button>
+
+        <div id="liveResults" class="hidden">
+          <p class="hint">The correct answer was:</p>
+          <p id="liveAnswerName" class="live-answer-name"></p>
+          <div id="liveTally" class="live-tally"></div>
+          <p id="liveMiniLeaderboardLabel" class="hint" style="margin-top: 10px;">Leaderboard so far:</p>
+          <ul id="liveMiniLeaderboard" class="players-list"></ul>
+          <button id="liveNextBtn" type="button" class="primary">Next Question</button>
+        </div>
+      </section>
+
       <section id="editSettingsPanel" class="card hidden">
         <h2>Edit Settings</h2>
         <form id="editSettingsForm">
           <input type="text" id="editRoomName" placeholder="Room Name (optional)" maxlength="60" />
           <input type="password" id="editRoomPassword" placeholder="Password (optional)" maxlength="60" />
-          <label class="hint" for="editRoundSeconds" style="text-align: left; margin-bottom: -4px;">Round timer</label>
-          <select id="editRoundSeconds">
-            <option value="60">1 minute</option>
-            <option value="120">2 minutes</option>
-            <option value="180">3 minutes</option>
-            <option value="300">5 minutes</option>
-            <option value="600">10 minutes</option>
+
+          <label class="hint" for="editGameMode" style="text-align: left; margin-bottom: -4px;">Game mode</label>
+          <select id="editGameMode">
+            <option value="self-paced">Self-Paced &mdash; everyone plays at their own speed</option>
+            <option value="live">Live / Kahoot-Style &mdash; you control a shared big screen</option>
           </select>
+
+          <div id="editRoundSecondsRow">
+            <label class="hint" for="editRoundSeconds" style="text-align: left; margin-bottom: -4px;">Round timer</label>
+            <select id="editRoundSeconds">
+              <option value="60">1 minute</option>
+              <option value="120">2 minutes</option>
+              <option value="180">3 minutes</option>
+              <option value="300">5 minutes</option>
+              <option value="600">10 minutes</option>
+            </select>
+          </div>
+
           <label class="hint" for="editFactsPerPlayer" style="text-align: left; margin-bottom: -4px;">Facts each player enters about themselves</label>
           <select id="editFactsPerPlayer">
             <option value="1">1 fact (default)</option>
@@ -121,25 +165,33 @@
             <option value="3">3 facts</option>
             <option value="5">5 facts</option>
           </select>
-          <label class="hint" for="editFactsToPlay" style="text-align: left; margin-bottom: -4px;">Number of players featured (shared pool)</label>
-          <select id="editFactsToPlay">
-            <option value="">All players (default)</option>
-            <option value="2">2 players</option>
-            <option value="3">3 players</option>
-            <option value="5">5 players</option>
-            <option value="10">10 players</option>
-          </select>
-          <label class="hint" for="editQuestionsPerPlayer" style="text-align: left; margin-bottom: -4px;">Questions each player is quizzed on</label>
-          <select id="editQuestionsPerPlayer">
-            <option value="">One per other player (default)</option>
-            <option value="3">3 questions</option>
-            <option value="5">5 questions</option>
-            <option value="10">10 questions</option>
-          </select>
+
           <label class="hint" style="text-align: left; display: flex; align-items: center; gap: 8px; margin: 4px 0 -4px;">
             <input type="checkbox" id="editMusicEnabled" style="width: auto;" />
             🎵 Play background music during the round
           </label>
+
+          <button id="editToggleAdvanced" type="button" class="secondary" style="margin-top: 4px;">Advanced settings &#9662;</button>
+          <div id="editAdvancedSettings" class="hidden">
+            <label class="hint" for="editFactsToPlay" style="text-align: left; margin-bottom: -4px;">Number of players featured (shared pool)</label>
+            <select id="editFactsToPlay">
+              <option value="">All players (default)</option>
+              <option value="2">2 players</option>
+              <option value="3">3 players</option>
+              <option value="5">5 players</option>
+              <option value="10">10 players</option>
+            </select>
+            <div id="editQuestionsPerPlayerRow">
+              <label class="hint" for="editQuestionsPerPlayer" style="text-align: left; margin-bottom: -4px;">Questions each player is quizzed on</label>
+              <select id="editQuestionsPerPlayer">
+                <option value="">One per other player (default)</option>
+                <option value="3">3 questions</option>
+                <option value="5">5 questions</option>
+                <option value="10">10 questions</option>
+              </select>
+            </div>
+          </div>
+
           <div class="controls">
             <button type="submit" class="primary">Save Changes</button>
             <button id="cancelEditSettings" type="button" class="secondary">Cancel</button>
