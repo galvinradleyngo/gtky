@@ -512,6 +512,7 @@ function startCountdown(endsAt) {
   const tick = () => {
     const remaining = endsAt - Date.now();
     timerEl.textContent = formatRemaining(remaining);
+    timerEl.classList.toggle('low-time', remaining > 0 && remaining <= 10000);
     if (remaining <= 0) stopCountdown();
   };
   tick();

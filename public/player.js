@@ -89,10 +89,21 @@ function startCountdown(endsAt) {
   const tick = () => {
     const remaining = endsAt - Date.now();
     timerEl.textContent = formatRemaining(remaining);
+    timerEl.classList.toggle('low-time', remaining > 0 && remaining <= 10000);
     if (remaining <= 0) stopCountdown();
   };
   tick();
   countdownTimer = setInterval(tick, 250);
+}
+
+function setStatus(text, kind) {
+  statusEl.textContent = text;
+  statusEl.classList.remove('status-correct', 'status-wrong');
+  if (kind) {
+    // restart the animation even if the same kind fires twice in a row
+    void statusEl.offsetWidth;
+    statusEl.classList.add(kind);
+  }
 }
 
 function stopCountdown() {
@@ -306,7 +317,7 @@ async function liveAnswer(guess) {
       setOptionsDisabled(false);
       return;
     }
-    statusEl.textContent = data.correct ? 'Correct!' : `Not quite — it was ${data.answer}.`;
+    setStatus(data.correct ? 'Correct!' : `Not quite — it was ${data.answer}.`, data.correct ? 'status-correct' : 'status-wrong');
     questionEl.classList.add('hidden');
     optionsEl.innerHTML = '';
     liveWaitingNotice.classList.remove('hidden');
@@ -448,7 +459,7 @@ async function answer(guess) {
       setOptionsDisabled(false);
       return;
     }
-    statusEl.textContent = data.correct ? 'Correct!' : `Not quite — it was ${data.answer}.`;
+    setStatus(data.correct ? 'Correct!' : `Not quite — it was ${data.answer}.`, data.correct ? 'status-correct' : 'status-wrong');
 
     setTimeout(() => {
       if (data.finished) {
