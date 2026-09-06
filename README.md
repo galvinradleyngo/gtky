@@ -6,7 +6,10 @@ guessing who each *other* fact belongs to — before a shared timer runs out.
 
 ## 🎮 Play Now
 
-The live game runs on Render — no install needed:
+**[Start here](https://galvinradleyngo.github.io/gtky/)** — an animated
+loading screen pings the live Render app and takes you straight in once
+it's actually awake (skips the blank-tab wait on a cold start). Or jump
+straight to Render if you know it's already warm:
 
 - **[Create a game](https://gtky-u0y9.onrender.com/)** (host)
 - **[Join a game](https://gtky-u0y9.onrender.com/player.html)** (player)
@@ -145,8 +148,13 @@ a minute before you actually start a session.
 GitHub Pages is enabled on this repo (Settings → Pages → source: `/docs` on
 `main`) and can only serve static files — it can't run `server.js`, so the
 actual game has to stay on Render (above). `docs/index.html` is a small
-static landing page with "Create a Game"/"Join a Game" buttons pointing at
-the live Render URL, published automatically on every push to `main`.
+static landing page, published automatically on every push to `main`, that
+doubles as a nicer cold-start experience: since Pages itself never sleeps
+but the free Render instance does (see "Deploying (Render, free tier)"
+above), landing here first means you see an animated retro loading screen
+that pings the Render URL in the background and only enables the "Create a
+Game"/"Join a Game" buttons once it actually responds — instead of
+clicking straight to Render and staring at a blank tab for up to a minute.
 
 Don't delete `docs/` without also disabling Pages in repo settings first
 (Settings → Pages → Source → None) — otherwise the Pages build workflow

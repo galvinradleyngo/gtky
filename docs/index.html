@@ -4,14 +4,19 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Gotten to Know You</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Press+Start+2P&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --purple: #5b3df5;
-    --purple-dark: #4527d6;
-    --blue: #2563eb;
+    --purple: #7c3aed;
+    --purple-dark: #4c1d95;
+    --pink: #ff3d9a;
+    --pink-dark: #c2185b;
+    --blue: #00c2ff;
     --ink: #1f1147;
     --muted: #6b6383;
+    --yellow: #ffd60a;
+    --green: #16e086;
+    --pixel-font: 'Press Start 2P', 'Space Grotesk', sans-serif;
   }
   * { box-sizing: border-box; }
   body {
@@ -20,74 +25,199 @@
     padding: 24px 16px 48px;
     min-height: 100vh;
     color: var(--ink);
-    background: linear-gradient(160deg, #6a4bf5, #9333ea 60%);
+    background: linear-gradient(160deg, #2b0f6b, #ff3d9a 65%);
+    background-size: 100% 200%;
+    animation: bgDrift 18s ease-in-out infinite alternate;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .page { max-width: 480px; margin: 0 auto; }
+  @keyframes bgDrift {
+    0% { background-position: 50% 0%; }
+    100% { background-position: 50% 100%; }
+  }
+  .page { max-width: 440px; width: 100%; }
   h1 {
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: var(--pixel-font);
     color: #ffffff;
-    font-size: 2.1rem;
+    font-size: clamp(1.1rem, 6vw, 1.5rem);
     text-align: center;
-    margin: 8px 0 4px;
-    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.12);
-  }
-  .tagline {
-    text-align: center;
-    color: #ffffff;
-    opacity: 0.9;
-    font-weight: 500;
-    margin: 0 0 20px;
+    line-height: 1.6;
+    margin: 0 0 24px;
+    text-shadow: 3px 3px 0 var(--pink-dark);
   }
   .card {
-    background: #ffffff;
+    background: #fffdf7;
+    border: 3px solid var(--ink);
     border-radius: 16px;
-    box-shadow: 0 12px 30px rgba(31, 17, 71, 0.25);
-    padding: 22px;
-    margin-bottom: 16px;
-  }
-  p { line-height: 1.5; }
-  .play-btn {
-    display: block;
+    box-shadow: 6px 6px 0 rgba(31, 17, 71, 0.85);
+    padding: 24px 20px;
     text-align: center;
-    padding: 18px 20px;
-    background: var(--purple);
+  }
+  .icon {
+    font-size: 2.6rem;
+    margin-bottom: 8px;
+    display: inline-block;
+    animation: bounce 1.4s ease-in-out infinite;
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  #statusText {
+    font-weight: 600;
+    margin: 6px 0 16px;
+    min-height: 1.4em;
+  }
+  .bar-track {
+    height: 22px;
+    border: 3px solid var(--ink);
+    border-radius: 999px;
+    background: #f0edff;
+    overflow: hidden;
+    margin-bottom: 20px;
+    padding: 3px;
+  }
+  .bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: repeating-linear-gradient(
+      45deg,
+      var(--pink), var(--pink) 10px,
+      var(--purple) 10px, var(--purple) 20px
+    );
+    background-size: 200% 100%;
+    animation: barStripes 1s linear infinite;
+    transition: width 0.3s ease;
+  }
+  @keyframes barStripes {
+    from { background-position: 0 0; }
+    to { background-position: 40px 0; }
+  }
+  .buttons { display: flex; flex-direction: column; gap: 12px; }
+  a.play-btn, button.play-btn {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 16px 20px;
+    background: var(--pink);
     color: white;
     text-decoration: none;
-    border-radius: 999px;
+    border: 3px solid var(--ink);
+    border-radius: 14px;
     font-family: 'Space Grotesk', sans-serif;
     font-weight: 700;
-    font-size: 1.2rem;
-    box-shadow: 0 4px 0 var(--purple-dark);
-    transition: transform 0.12s ease;
+    font-size: 1.1rem;
+    box-shadow: 4px 4px 0 var(--ink);
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.1s ease, opacity 0.2s ease;
   }
-  .play-btn:hover { transform: translateY(-2px); }
-  .play-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--purple-dark); }
-  .play-btn.secondary {
-    background: #e0edff;
-    color: var(--blue);
-    box-shadow: 0 4px 0 #b9d4fb;
-    margin-top: 12px;
+  a.play-btn.secondary { background: var(--blue); }
+  a.play-btn:hover, button.play-btn:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink); }
+  a.play-btn:active, button.play-btn:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+  .buttons.disabled a.play-btn {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+  #readyBadge {
+    display: none;
+    font-family: var(--pixel-font);
+    font-size: 0.8rem;
+    color: var(--green);
+    margin-bottom: 16px;
+    animation: readyPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes readyPop {
+    0% { opacity: 0; transform: scale(0.6); }
+    100% { opacity: 1; transform: scale(1); }
   }
   .hint {
     color: var(--muted);
     font-size: 0.85rem;
     line-height: 1.5;
-    text-align: center;
+    margin-top: 16px;
   }
+  .hint a { color: var(--purple-dark); }
 </style>
 </head>
 <body>
   <div class="page">
     <h1>🎉 Gotten to Know You</h1>
-    <p class="tagline">A Kahoot-style icebreaker quiz — guess who each fun fact belongs to.</p>
-
     <div class="card">
-      <a class="play-btn" href="https://gtky-u0y9.onrender.com/">🎮 Create a Game</a>
-      <a class="play-btn secondary" href="https://gtky-u0y9.onrender.com/player.html">🙋 Join a Game</a>
-      <p class="hint" style="margin-top: 16px;">
-        No install or account needed — everything runs in your browser.
+      <span class="icon" id="icon">🕹️</span>
+      <p id="statusText">Warming up the game...</p>
+      <div class="bar-track"><div class="bar-fill" id="barFill"></div></div>
+      <p id="readyBadge">✅ READY!</p>
+      <div class="buttons disabled" id="buttons">
+        <a class="play-btn" id="createLink" href="#">🎮 Create a Game</a>
+        <a class="play-btn secondary" id="joinLink" href="#">🙋 Join a Game</a>
+      </div>
+      <p class="hint">
+        First load can take up to a minute on the free server tier &mdash;
+        after that it's instant. <a href="#" id="skipLink">Skip waiting &rarr;</a>
       </p>
     </div>
   </div>
+
+  <script>
+    var RENDER_BASE = 'https://gtky-u0y9.onrender.com';
+    document.getElementById('createLink').href = RENDER_BASE + '/';
+    document.getElementById('joinLink').href = RENDER_BASE + '/player.html';
+    document.getElementById('skipLink').href = RENDER_BASE + '/';
+
+    var statusText = document.getElementById('statusText');
+    var barFill = document.getElementById('barFill');
+    var readyBadge = document.getElementById('readyBadge');
+    var buttons = document.getElementById('buttons');
+    var icon = document.getElementById('icon');
+
+    var startTime = Date.now();
+    var FAKE_DURATION_MS = 35000; // eases toward 90% over ~35s
+    var done = false;
+
+    function tickFakeProgress() {
+      if (done) return;
+      var elapsed = Date.now() - startTime;
+      var pct = Math.min(90, (elapsed / FAKE_DURATION_MS) * 90);
+      barFill.style.width = pct + '%';
+      requestAnimationFrame(tickFakeProgress);
+    }
+    tickFakeProgress();
+
+    function markReady() {
+      if (done) return;
+      done = true;
+      barFill.style.width = '100%';
+      barFill.style.animation = 'none';
+      icon.textContent = '🎉';
+      statusText.textContent = 'The game is awake and ready to play!';
+      readyBadge.style.display = 'block';
+      buttons.classList.remove('disabled');
+    }
+
+    function markSlow() {
+      statusText.textContent = "Still warming up — free-tier servers can be slow to start...";
+    }
+
+    function markTroubled() {
+      statusText.textContent = "Taking longer than expected. You can wait, or jump in directly:";
+      icon.textContent = '🔧';
+    }
+
+    function pingUntilReady(attempt) {
+      if (done) return;
+      fetch(RENDER_BASE + '/', { mode: 'no-cors', cache: 'no-store' })
+        .then(function () { markReady(); })
+        .catch(function () {
+          if (done) return;
+          setTimeout(function () { pingUntilReady(attempt + 1); }, 2500);
+        });
+    }
+    pingUntilReady(0);
+
+    setTimeout(markSlow, 15000);
+    setTimeout(markTroubled, 60000);
+  </script>
 </body>
 </html>
