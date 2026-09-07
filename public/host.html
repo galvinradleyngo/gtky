@@ -24,11 +24,20 @@
         <input type="text" id="roomName" placeholder="Room Name (optional)" maxlength="60" />
         <input type="password" id="roomPassword" placeholder="Password (optional, for you to edit/reopen later)" maxlength="60" />
 
-        <label class="hint" for="gameMode" style="text-align: left; margin-bottom: -4px;">Game mode</label>
-        <select id="gameMode">
-          <option value="self-paced" selected>Self-Paced &mdash; everyone plays at their own speed</option>
-          <option value="live">Live / Kahoot-Style &mdash; you control a shared big screen</option>
-        </select>
+        <label class="hint" style="text-align: left; margin-bottom: -4px;">Game mode</label>
+        <div id="gameModeCards" class="mode-picker">
+          <button type="button" class="mode-card selected" data-mode="self-paced">
+            <span class="mode-card-icon">🏃</span>
+            <span class="mode-card-label">Self-Paced</span>
+            <span class="mode-card-desc">Everyone plays at their own speed</span>
+          </button>
+          <button type="button" class="mode-card" data-mode="live">
+            <span class="mode-card-icon">📺</span>
+            <span class="mode-card-label">Play Together</span>
+            <span class="mode-card-desc">You control a shared big screen</span>
+          </button>
+        </div>
+        <input type="hidden" id="gameMode" value="self-paced" />
 
         <div id="roundSecondsRow">
           <label class="hint" for="roundSeconds" style="text-align: left; margin-bottom: -4px;">Round timer</label>
@@ -141,11 +150,20 @@
           <input type="text" id="editRoomName" placeholder="Room Name (optional)" maxlength="60" />
           <input type="password" id="editRoomPassword" placeholder="Password (optional)" maxlength="60" />
 
-          <label class="hint" for="editGameMode" style="text-align: left; margin-bottom: -4px;">Game mode</label>
-          <select id="editGameMode">
-            <option value="self-paced">Self-Paced &mdash; everyone plays at their own speed</option>
-            <option value="live">Live / Kahoot-Style &mdash; you control a shared big screen</option>
-          </select>
+          <label class="hint" style="text-align: left; margin-bottom: -4px;">Game mode</label>
+          <div id="editGameModeCards" class="mode-picker">
+            <button type="button" class="mode-card" data-mode="self-paced">
+              <span class="mode-card-icon">🏃</span>
+              <span class="mode-card-label">Self-Paced</span>
+              <span class="mode-card-desc">Everyone plays at their own speed</span>
+            </button>
+            <button type="button" class="mode-card" data-mode="live">
+              <span class="mode-card-icon">📺</span>
+              <span class="mode-card-label">Play Together</span>
+              <span class="mode-card-desc">You control a shared big screen</span>
+            </button>
+          </div>
+          <input type="hidden" id="editGameMode" value="self-paced" />
 
           <div id="editRoundSecondsRow">
             <label class="hint" for="editRoundSeconds" style="text-align: left; margin-bottom: -4px;">Round timer</label>

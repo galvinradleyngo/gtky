@@ -447,8 +447,22 @@ function updateEditModeVisibility() {
   editQuestionsPerPlayerRow.classList.toggle('hidden', isLive);
 }
 
-gameModeInput.onchange = updateModeVisibility;
-editGameMode.onchange = updateEditModeVisibility;
+// Wires a row of icon "mode cards" (instead of a plain <select>) to a
+// hidden input holding the actual value, so the rest of the code can keep
+// reading/writing gameMode.value exactly like before.
+function setupModePicker(containerEl, hiddenInputEl, onChange) {
+  const cards = [...containerEl.querySelectorAll('.mode-card')];
+  function select(mode) {
+    hiddenInputEl.value = mode;
+    cards.forEach(c => c.classList.toggle('selected', c.dataset.mode === mode));
+    onChange();
+  }
+  cards.forEach(card => (card.onclick = () => select(card.dataset.mode)));
+  return select;
+}
+
+const selectGameMode = setupModePicker(document.getElementById('gameModeCards'), gameModeInput, updateModeVisibility);
+const selectEditGameMode = setupModePicker(document.getElementById('editGameModeCards'), editGameMode, updateEditModeVisibility);
 updateModeVisibility();
 
 toggleAdvancedBtn.onclick = () => advancedSettings.classList.toggle('hidden');
@@ -548,7 +562,7 @@ function enterActiveState(endsAt) {
   }
 }
 
-// Live/Kahoot-style mode has no shared countdown -- the host paces it by
+// Play Together mode has no shared countdown -- the host paces it by
 // hand (Reveal, then Next) -- so this is a distinct entry point from the
 // self-paced enterActiveState rather than a variant of it.
 function enterLiveActiveState() {
@@ -807,13 +821,12 @@ muteMusicBtn.onclick = () => {
 editSettingsBtn.onclick = () => {
   editRoomName.value = currentRoomName;
   editRoomPassword.value = '';
-  editGameMode.value = currentGameMode;
+  selectEditGameMode(currentGameMode);
   editRoundSeconds.value = String(currentRoundSeconds);
   editFactsPerPlayer.value = String(currentFactsPerPlayer);
   editFactsToPlay.value = currentFactsToPlay ? String(currentFactsToPlay) : '';
   editQuestionsPerPlayer.value = currentQuestionsPerPlayer ? String(currentQuestionsPerPlayer) : '';
   editMusicEnabled.checked = musicEnabled;
-  updateEditModeVisibility();
   editSettingsPanel.classList.remove('hidden');
   editSettingsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 };
