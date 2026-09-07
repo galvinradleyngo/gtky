@@ -1,6 +1,6 @@
 # GTKY (Gotten/Getting to Know You)
 
-GTKY is a lightweight, Kahoot-style icebreaker quiz. Everyone
+GTKY is a lightweight, fast-paced icebreaker quiz. Everyone
 submits a fun fact about themselves, then races through a personal quiz —
 guessing who each *other* fact belongs to — before a shared timer runs out.
 

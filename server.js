@@ -802,7 +802,7 @@ function handleAPI(req, res) {
       if (room.gameMode === 'live') {
         // One shared question sequence for the whole room, host-paced --
         // no per-player queues and no round timer (the host advances
-        // manually via /live-reveal then /live-next, Kahoot-style).
+        // manually via /live-reveal then /live-next).
         room.liveQueue = shuffle(subjectPool);
         room.liveIndex = 0;
         room.liveState = 'question';
